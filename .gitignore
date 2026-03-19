@@ -1,0 +1,23 @@
+# Backups
+*.bak
+*.bak.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temp
+/tmp/
+*.log
+
+# Nested repos (managed separately)
+ptzenity-website/
+rengine-deploy/
+rengine-patches/
+rengine-ng-custom.css

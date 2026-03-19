@@ -1,0 +1,45 @@
+id: nextjs-open-redirect
+
+info:
+  name: Next.js Open Redirect via _next/image or redirects
+  author: pt-zenity
+  severity: medium
+  description: |
+    Next.js applications may be vulnerable to open redirect attacks through
+    misconfigured redirect rules or the _next/image endpoint. Attackers can
+    craft URLs that redirect users to malicious external sites.
+  reference:
+    - https://nextjs.org/docs/api-reference/next/image
+  tags: nextjs,redirect,open-redirect
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/_next/image?url=https://evil.com&w=128&q=75"
+      - "{{BaseURL}}/?redirect=https://evil.com"
+      - "{{BaseURL}}/?next=https://evil.com"
+      - "{{BaseURL}}/?url=https://evil.com"
+      - "{{BaseURL}}/api/auth/callback/credentials?callbackUrl=https://evil.com"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - "(?i)location: https?://evil\\.com"
+          - "(?i)location: //evil\\.com"
+
+      - type: word
+        part: body
+        words:
+          - "evil.com"
+        condition: and
+
+      - type: status
+        status:
+          - 301
+          - 302
+          - 307
+          - 308

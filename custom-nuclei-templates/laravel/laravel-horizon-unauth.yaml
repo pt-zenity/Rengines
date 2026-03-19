@@ -1,0 +1,50 @@
+id: laravel-horizon-unauth
+
+info:
+  name: Laravel Horizon Unauthenticated Access
+  author: pt-zenity
+  severity: high
+  description: |
+    Laravel Horizon dashboard is accessible without authentication.
+    Horizon provides a dashboard for monitoring and managing Redis-backed
+    queue workers. Unauthenticated access can allow attackers to inspect
+    jobs, inject malicious payloads into queues, or disrupt application operations.
+  reference:
+    - https://laravel.com/docs/horizon
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+    cvss-score: 9.8
+    cwe-id: CWE-306
+  tags: laravel,horizon,unauth,exposure,high
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/horizon"
+      - "{{BaseURL}}/horizon/dashboard"
+      - "{{BaseURL}}/horizon/api/stats"
+      - "{{BaseURL}}/horizon/api/jobs/pending"
+      - "{{BaseURL}}/horizon/api/jobs/recent"
+      - "{{BaseURL}}/horizon/api/workload"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "horizon"
+          - "Horizon"
+          - "Laravel Horizon"
+          - "horizon-ui"
+        condition: and
+
+      - type: word
+        part: body
+        words:
+          - '"wait":'
+          - '"processes":'
+          - '"throughput":'
+          - '"recentJobs":'
+        condition: or

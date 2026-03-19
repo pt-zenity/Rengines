@@ -1,0 +1,74 @@
+id: generic-firebase-exposure
+
+info:
+  name: Firebase / Firestore Unauthenticated Access
+  author: pt-zenity
+  severity: critical
+  description: |
+    Firebase Realtime Database or Firestore is publicly accessible without
+    authentication. This can expose all stored data including user information,
+    application data, and sensitive configuration. Misconfigured Firebase rules
+    often allow full read/write access to the database.
+  reference:
+    - https://firebase.google.com/docs/database/security
+    - https://owasp.org/www-project-top-ten/
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N
+    cvss-score: 9.1
+    cwe-id: CWE-306
+  tags: firebase,firestore,exposure,critical,cloud
+
+http:
+  - raw:
+      - |
+        GET /.json HTTP/1.1
+        Host: {{Hostname}}
+        Accept: application/json
+
+      - |
+        GET /users.json HTTP/1.1
+        Host: {{Hostname}}
+
+      - |
+        GET /users/.json?shallow=true HTTP/1.1
+        Host: {{Hostname}}
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "application/json"
+
+      - type: dsl
+        dsl:
+          - "!contains(body, 'error') && !contains(body, 'null') && len(body) > 2"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/v1/projects/{{project_id}}/databases/(default)/documents"
+
+    payloads:
+      project_id:
+        - "test"
+        - "app"
+        - "{{Hostname}}"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        words:
+          - '"documents"'
+          - '"fields"'
+        condition: and

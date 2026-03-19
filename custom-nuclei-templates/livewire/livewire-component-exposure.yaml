@@ -1,0 +1,45 @@
+id: livewire-component-exposure
+
+info:
+  name: Livewire Component Debug / Exposure
+  author: pt-zenity
+  severity: medium
+  description: |
+    Laravel Livewire application is exposing component information or debug data.
+    Livewire components can leak internal state, component names, class paths,
+    and data when misconfigured or when debug mode is enabled.
+  reference:
+    - https://livewire.laravel.com
+  tags: livewire,laravel,exposure,debug
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/livewire"
+      - "{{BaseURL}}/livewire/livewire.js"
+      - "{{BaseURL}}/livewire/livewire.min.js"
+      - "{{BaseURL}}/livewire/message"
+      - "{{BaseURL}}/livewire/upload-file"
+      - "{{BaseURL}}/vendor/livewire/livewire.js"
+      - "{{BaseURL}}/vendor/livewire/livewire.min.js"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "livewire"
+          - "Livewire"
+          - "window.livewire"
+          - "window.Livewire"
+        condition: and
+
+      - type: word
+        part: body
+        words:
+          - "wire:id"
+          - "wire:data"
+          - "wire:initial-data"
+        condition: or

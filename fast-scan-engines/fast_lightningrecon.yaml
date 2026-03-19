@@ -1,0 +1,27 @@
+ # ============================================================                           +
+ #  LIGHTNING FAST RECON  -- pt-zenity                                                    +
+ #  Subdomain discovery + live check dalam <5 menit                                       +
+ #  Tools: subfinder + ctfr + tlsx + httpx ONLY                                           +
+ #  Threads: 50 | Timeout: 4s | Rate: 300/s                                               +
+ # ============================================================                           +
+                                                                                          +
+ scan_type: 'bug_bounty'                                                                  +
+ timeout: 4                                                                               +
+ threads: 50                                                                              +
+ rate_limit: 300                                                                          +
+                                                                                          +
+ custom_header: {                                                                         +
+   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0',+
+ }                                                                                        +
+                                                                                          +
+ subdomain_discovery: {                                                                   +
+   'uses_tools': ['subfinder', 'ctfr', 'tlsx'],                                           +
+   'threads': 50,                                                                         +
+   'timeout': 4,                                                                          +
+ }                                                                                        +
+                                                                                          +
+ http_crawl: {                                                                            +
+   'threads': 50,                                                                         +
+   'precrawl_batch_size': 500,                                                            +
+ }
+

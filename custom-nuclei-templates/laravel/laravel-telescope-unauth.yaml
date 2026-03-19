@@ -1,0 +1,56 @@
+id: laravel-telescope-unauth
+
+info:
+  name: Laravel Telescope Unauthenticated Access
+  author: pt-zenity
+  severity: high
+  description: |
+    Laravel Telescope debug panel is publicly accessible without authentication.
+    Telescope records all requests, exceptions, database queries, queued jobs,
+    mail, notifications, cache operations, scheduled tasks, variable dumps, and more.
+    This can expose sensitive application data to attackers.
+  reference:
+    - https://laravel.com/docs/telescope
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+    cwe-id: CWE-306
+  tags: laravel,telescope,exposure,unauth,high
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/telescope"
+      - "{{BaseURL}}/telescope/requests"
+      - "{{BaseURL}}/telescope/queries"
+      - "{{BaseURL}}/telescope/exceptions"
+      - "{{BaseURL}}/telescope/commands"
+      - "{{BaseURL}}/telescope/schedule"
+      - "{{BaseURL}}/telescope/jobs"
+      - "{{BaseURL}}/telescope/mail"
+      - "{{BaseURL}}/telescope/logs"
+      - "{{BaseURL}}/telescope/cache"
+      - "{{BaseURL}}/api/telescope/entries"
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        words:
+          - "telescope"
+          - "Telescope"
+          - "Laravel Telescope"
+          - "__telescope"
+        condition: or
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"(url|email|ip|user_id|payload|response)":\s*"[^"]{1,200}"'

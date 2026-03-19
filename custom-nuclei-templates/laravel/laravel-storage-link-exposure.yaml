@@ -1,0 +1,54 @@
+id: laravel-storage-link-exposure
+
+info:
+  name: Laravel Storage / Upload Directory Exposure
+  author: pt-zenity
+  severity: high
+  description: |
+    Laravel application is exposing files in the storage/uploads directory.
+    This can allow attackers to access uploaded files, backup files, logs,
+    or even execute uploaded PHP webshells if the directory is misconfigured.
+  reference:
+    - https://laravel.com/docs/filesystem
+  classification:
+    cwe-id: CWE-552
+  tags: laravel,storage,exposure,file-access
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/storage"
+      - "{{BaseURL}}/storage/app"
+      - "{{BaseURL}}/storage/app/public"
+      - "{{BaseURL}}/storage/logs"
+      - "{{BaseURL}}/storage/logs/laravel.log"
+      - "{{BaseURL}}/storage/framework/cache"
+      - "{{BaseURL}}/public/storage"
+      - "{{BaseURL}}/uploads"
+      - "{{BaseURL}}/public/uploads"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Index of /"
+          - "[DIR]"
+          - "Parent Directory"
+        condition: or
+
+      - type: word
+        part: body
+        words:
+          - "[2"
+          - "production.ERROR"
+          - "local.ERROR"
+          - "Stack trace:"
+        condition: and
+
+      - type: status
+        status:
+          - 200
+        condition: and

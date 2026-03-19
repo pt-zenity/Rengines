@@ -1,0 +1,37 @@
+ # ============================================================                           +
+ #  QUICK VULN SCANNER  -- pt-zenity                                                      +
+ #  Nuclei only: High + Critical severities                                               +
+ #  Concurrency: 100 | Rate: 300/s | No retries                                           +
+ #  Gunakan sbg subscan setelah subdomain diketahui                                       +
+ # ============================================================                           +
+                                                                                          +
+ scan_type: 'bug_bounty'                                                                  +
+ timeout: 4                                                                               +
+ threads: 80                                                                              +
+ rate_limit: 300                                                                          +
+                                                                                          +
+ custom_header: {                                                                         +
+   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0',+
+ }                                                                                        +
+                                                                                          +
+ http_crawl: {                                                                            +
+   'threads': 80,                                                                         +
+ }                                                                                        +
+                                                                                          +
+ vulnerability_scan: {                                                                    +
+   'run_nuclei': true,                                                                    +
+   'run_dalfox': false,                                                                   +
+   'run_crlfuzz': false,                                                                  +
+   'run_s3scanner': false,                                                                +
+   'concurrency': 100,                                                                    +
+   'intensity': 'normal',                                                                 +
+   'rate_limit': 300,                                                                     +
+   'retries': 0,                                                                          +
+   'timeout': 4,                                                                          +
+   'fetch_llm_report': false,                                                             +
+   'nuclei': {                                                                            +
+     'use_nuclei_config': false,                                                          +
+     'severities': ['high', 'critical'],                                                  +
+   }                                                                                      +
+ }
+

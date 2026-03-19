@@ -1,0 +1,58 @@
+id: nextjs-api-routes-enum
+
+info:
+  name: Next.js API Routes Enumeration
+  author: pt-zenity
+  severity: medium
+  description: |
+    Next.js application exposes common API routes that may be unauthenticated
+    or return sensitive data. Common misconfigurations include exposed
+    /api/auth, /api/user, /api/admin endpoints accessible without authentication.
+  reference:
+    - https://nextjs.org/docs/api-routes/introduction
+  tags: nextjs,api,exposure,enum
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/auth/session"
+      - "{{BaseURL}}/api/auth/providers"
+      - "{{BaseURL}}/api/auth/csrf"
+      - "{{BaseURL}}/api/user"
+      - "{{BaseURL}}/api/users"
+      - "{{BaseURL}}/api/me"
+      - "{{BaseURL}}/api/health"
+      - "{{BaseURL}}/api/status"
+      - "{{BaseURL}}/api/config"
+      - "{{BaseURL}}/api/env"
+      - "{{BaseURL}}/api/debug"
+      - "{{BaseURL}}/api/admin"
+      - "{{BaseURL}}/api/v1"
+      - "{{BaseURL}}/api/v1/users"
+      - "{{BaseURL}}/api/v2"
+      - "{{BaseURL}}/api/graphql"
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "application/json"
+
+      - type: word
+        part: body
+        words:
+          - "{"
+        condition: and
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"(email|username|name|role|id|token|key|secret)"\s*:\s*"[^"]{1,200}"'

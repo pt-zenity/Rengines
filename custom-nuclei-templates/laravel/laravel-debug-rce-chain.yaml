@@ -1,0 +1,71 @@
+id: laravel-debug-rce-chain
+
+info:
+  name: Laravel Debug Mode + Ignition RCE Chain Detection
+  author: pt-zenity
+  severity: critical
+  description: |
+    Detects Laravel applications running with debug mode enabled that are
+    potentially vulnerable to Remote Code Execution. When APP_DEBUG=true,
+    Laravel's Ignition error handler may expose an endpoint that allows
+    arbitrary PHP code execution (CVE-2021-3129).
+  remediation: Set APP_DEBUG=false in production and upgrade Laravel/Ignition.
+  reference:
+    - https://nvd.nist.gov/vuln/detail/CVE-2021-3129
+    - https://www.ambionics.io/blog/laravel-debug-rce
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+    cvss-score: 9.8
+    cve-id: CVE-2021-3129
+    cwe-id: CWE-78
+  tags: cve,laravel,debug,rce,critical,ignition
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+      - "{{BaseURL}}/_ignition/health-check"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Whoops! There was an error."
+          - "Laravel"
+          - "Illuminate\\"
+          - "APP_DEBUG"
+          - "Ignition"
+        condition: and
+
+      - type: word
+        part: body
+        words:
+          - "canExecuteSolutions"
+          - "ignition/execute-solution"
+        condition: or
+
+  - raw:
+      - |
+        POST /_ignition/execute-solution HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+        Accept: application/json
+
+        {"solution":"Facade\\Ignition\\Solutions\\MakeViewVariableOptionalSolution","parameters":{"variableName":"cve202131291","viewFile":"php://filter/write=convert.iconv.utf-8.utf-16be|convert.quoted-printable-encode|convert.iconv.utf-16be.utf-8|convert.base64-decode/resource=/dev/null"}}
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        words:
+          - "solution_response"
+          - "runnable"
+          - "canExecuteSolutions"
+        condition: or

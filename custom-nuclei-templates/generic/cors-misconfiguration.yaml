@@ -1,0 +1,54 @@
+id: generic-cors-misconfiguration
+
+info:
+  name: CORS Misconfiguration - Arbitrary Origin Reflection
+  author: pt-zenity
+  severity: high
+  description: |
+    The web application reflects arbitrary Origin headers in the
+    Access-Control-Allow-Origin response header. When combined with
+    Access-Control-Allow-Credentials: true, this allows attackers to
+    make cross-origin requests with credentials and steal sensitive data.
+  reference:
+    - https://portswigger.net/web-security/cors
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:N
+    cvss-score: 6.5
+    cwe-id: CWE-942
+  tags: cors,misconfig,high
+
+http:
+  - raw:
+      - |
+        GET /api/me HTTP/1.1
+        Host: {{Hostname}}
+        Origin: https://evil.pt-zenity.com
+        Accept: application/json
+
+      - |
+        GET /api/user HTTP/1.1
+        Host: {{Hostname}}
+        Origin: https://evil.pt-zenity.com
+        Accept: application/json
+
+      - |
+        GET /api/auth/session HTTP/1.1
+        Host: {{Hostname}}
+        Origin: https://evil.pt-zenity.com
+        Accept: application/json
+
+      - |
+        GET / HTTP/1.1
+        Host: {{Hostname}}
+        Origin: null
+        Accept: application/json
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: dsl
+        dsl:
+          - "contains(tolower(header), 'access-control-allow-origin: https://evil.pt-zenity.com')"
+          - "contains(tolower(header), 'access-control-allow-origin: null')"
+          - "contains(tolower(header), 'access-control-allow-credentials: true') && contains(tolower(header), 'access-control-allow-origin: *')"

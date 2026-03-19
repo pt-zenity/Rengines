@@ -1,0 +1,33 @@
+ # ============================================================                           +
+ #  INSTANT SUBDOMAIN + SCREENSHOT  -- pt-zenity                                          +
+ #  Recon cepat dengan hasil visual screenshot                                            +
+ #  Tanpa vuln/port scan -- cocok untuk asset overview                                    +
+ #  Selesai dalam <10 menit untuk domain medium                                           +
+ # ============================================================                           +
+                                                                                          +
+ scan_type: 'bug_bounty'                                                                  +
+ timeout: 5                                                                               +
+ threads: 50                                                                              +
+ rate_limit: 200                                                                          +
+                                                                                          +
+ custom_header: {                                                                         +
+   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0',+
+ }                                                                                        +
+                                                                                          +
+ subdomain_discovery: {                                                                   +
+   'uses_tools': ['subfinder', 'ctfr', 'tlsx'],                                           +
+   'threads': 50,                                                                         +
+   'timeout': 5,                                                                          +
+ }                                                                                        +
+                                                                                          +
+ http_crawl: {                                                                            +
+   'threads': 50,                                                                         +
+   'precrawl_batch_size': 400,                                                            +
+ }                                                                                        +
+                                                                                          +
+ screenshot: {                                                                            +
+   'intensity': 'normal',                                                                 +
+   'timeout': 8,                                                                          +
+   'threads': 50,                                                                         +
+ }
+

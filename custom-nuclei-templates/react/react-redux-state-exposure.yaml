@@ -1,0 +1,49 @@
+id: react-redux-state-exposure
+
+info:
+  name: React Redux State / Window Object Sensitive Data
+  author: pt-zenity
+  severity: high
+  description: |
+    React application is exposing sensitive data through window.__INITIAL_STATE__,
+    window.__PRELOADED_STATE__, or window.__REDUX_STATE__. These server-side
+    rendered state objects can contain auth tokens, user data, API keys,
+    session information, and internal configuration.
+  reference:
+    - https://redux.js.org/usage/server-rendering
+  classification:
+    cwe-id: CWE-312
+  tags: react,redux,state,exposure,high
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+      - "{{BaseURL}}/app"
+      - "{{BaseURL}}/dashboard"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "window\\.__INITIAL_STATE__\\s*=\\s*\\{"
+          - "window\\.__PRELOADED_STATE__\\s*=\\s*\\{"
+          - "window\\.__REDUX_STATE__\\s*=\\s*\\{"
+          - "window\\.__APP_STATE__\\s*=\\s*\\{"
+          - "window\\.__NEXT_DATA__\\s*=\\s*\\{"
+
+      - type: regex
+        part: body
+        regex:
+          - "\"(token|apiKey|authToken|accessToken|jwt)\":\\s*\"[A-Za-z0-9_\\-\\.]{20,}\""
+          - "\"(password|secret|private_key)\":\\s*\"[^\"]{4,}\""
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - "\"(token|apiKey|authToken|jwt|secret)\":\\s*\"([A-Za-z0-9_.\\-]{10,})\""
+          - "\"(email|username|name|role)\":\\s*\"([^\"]{1,100})\""

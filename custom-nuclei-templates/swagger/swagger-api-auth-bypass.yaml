@@ -1,0 +1,60 @@
+id: swagger-auth-bypass
+
+info:
+  name: Swagger API Authentication Bypass / Test Endpoint
+  author: pt-zenity
+  severity: high
+  description: |
+    Swagger/OpenAPI endpoints may be accessible without authentication
+    or with default credentials. Test endpoints and debug APIs often
+    bypass authentication middleware in development configurations.
+  reference:
+    - https://owasp.org/www-project-api-security/
+  classification:
+    cwe-id: CWE-306
+  tags: swagger,api,auth-bypass,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/users"
+      - "{{BaseURL}}/api/v2/users"
+      - "{{BaseURL}}/api/admin/users"
+      - "{{BaseURL}}/api/v1/admin"
+      - "{{BaseURL}}/api/test"
+      - "{{BaseURL}}/api/debug"
+      - "{{BaseURL}}/api/internal"
+      - "{{BaseURL}}/api/private"
+      - "{{BaseURL}}/api/system"
+      - "{{BaseURL}}/api/health"
+      - "{{BaseURL}}/api/metrics"
+      - "{{BaseURL}}/api/actuator"
+      - "{{BaseURL}}/api/actuator/env"
+      - "{{BaseURL}}/api/actuator/beans"
+
+    headers:
+      Accept: "application/json"
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "application/json"
+
+      - type: dsl
+        dsl:
+          - "len(body) > 5"
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"(email|username|password|token|api_key|secret)"\s*:\s*"[^"]{1,200}"'
+          - '"(role|admin|superuser|is_admin)"\s*:\s*(true|"admin"|1)'

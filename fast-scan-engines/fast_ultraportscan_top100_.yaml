@@ -1,0 +1,28 @@
+ # ============================================================                           +
+ #  ULTRA FAST PORT SCAN  -- pt-zenity                                                    +
+ #  Naabu top-100 ports: threads 100, rate 500/s                                          +
+ #  Cocok untuk IP range / internal network / asset discovery                             +
+ #  Timeout: 3s | Threads: 100 | Rate: 500/s                                              +
+ # ============================================================                           +
+                                                                                          +
+ scan_type: 'bug_bounty'                                                                  +
+ timeout: 3                                                                               +
+ threads: 100                                                                             +
+ rate_limit: 500                                                                          +
+                                                                                          +
+ custom_header: {                                                                         +
+   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0',+
+ }                                                                                        +
+                                                                                          +
+ http_crawl: {                                                                            +
+   'threads': 100,                                                                        +
+ }                                                                                        +
+                                                                                          +
+ port_scan: {                                                                             +
+   'timeout': 3,                                                                          +
+   'ports': ['top-100'],                                                                  +
+   'rate_limit': 500,                                                                     +
+   'threads': 100,                                                                        +
+   'passive': false,                                                                      +
+ }
+

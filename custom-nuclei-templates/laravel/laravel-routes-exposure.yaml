@@ -1,0 +1,57 @@
+id: laravel-routes-exposure
+
+info:
+  name: Laravel API Routes / Route List Exposed
+  author: pt-zenity
+  severity: medium
+  description: |
+    Laravel application is exposing its route list or API documentation,
+    revealing all application endpoints including authenticated routes,
+    admin endpoints, and internal API paths.
+  reference:
+    - https://laravel.com/docs/routing
+  tags: laravel,routes,exposure,api,enum
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api"
+      - "{{BaseURL}}/api/routes"
+      - "{{BaseURL}}/api/endpoints"
+      - "{{BaseURL}}/routes"
+      - "{{BaseURL}}/artisan"
+      - "{{BaseURL}}/api/admin"
+      - "{{BaseURL}}/api/v1"
+      - "{{BaseURL}}/api/v2"
+      - "{{BaseURL}}/api/user"
+      - "{{BaseURL}}/api/users"
+      - "{{BaseURL}}/api/me"
+      - "{{BaseURL}}/api/auth"
+      - "{{BaseURL}}/api/auth/login"
+      - "{{BaseURL}}/api/profile"
+      - "{{BaseURL}}/api/settings"
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "application/json"
+
+      - type: word
+        part: body
+        words:
+          - "{"
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"(endpoint|route|path|url)"\s*:\s*"\/[^"]{1,100}"'
+          - '"(token|api_key|secret)"\s*:\s*"[^"]{8,}"'

@@ -1,0 +1,63 @@
+id: generic-js-api-key-leak
+
+info:
+  name: JavaScript Bundle API Key / Secret Leak
+  author: pt-zenity
+  severity: high
+  description: |
+    JavaScript bundle files are exposing hardcoded API keys, tokens, or secrets.
+    This includes AWS keys, Google API keys, Stripe keys, Firebase credentials,
+    and other sensitive authentication material.
+  reference:
+    - https://owasp.org/www-project-secrets-management/
+  classification:
+    cwe-id: CWE-798
+  tags: exposure,apikey,secret,high,js
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/static/js/main.js"
+      - "{{BaseURL}}/static/js/bundle.js"
+      - "{{BaseURL}}/static/js/app.js"
+      - "{{BaseURL}}/assets/js/app.js"
+      - "{{BaseURL}}/js/app.js"
+      - "{{BaseURL}}/dist/bundle.js"
+      - "{{BaseURL}}/build/static/js/main.js"
+      - "{{BaseURL}}/_next/static/chunks/pages/index.js"
+      - "{{BaseURL}}/vendor.js"
+      - "{{BaseURL}}/runtime.js"
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        regex:
+          - "AKIA[0-9A-Z]{16}"
+          - "AIza[0-9A-Za-z\\-_]{35}"
+          - "sk_live_[0-9a-zA-Z]{24}"
+          - "pk_live_[0-9a-zA-Z]{24}"
+          - "rk_live_[0-9a-zA-Z]{24}"
+          - "AAAA[A-Za-z0-9_\\-]{7}:[A-Za-z0-9_\\-]{140}"
+          - "ghp_[0-9a-zA-Z]{36}"
+          - "github_pat_[0-9a-zA-Z_]{82}"
+          - "xox[baprs]\\-([0-9a-zA-Z]{10,48})"
+          - "-----BEGIN RSA PRIVATE KEY-----"
+          - "-----BEGIN EC PRIVATE KEY-----"
+          - "-----BEGIN OPENSSH PRIVATE KEY-----"
+          - "eyJhbGciOiJ[A-Za-z0-9_\\-]+"
+        condition: or
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - "AKIA[0-9A-Z]{16}"
+          - "AIza[0-9A-Za-z\\-_]{35}"
+          - "sk_live_[0-9a-zA-Z]{24}"

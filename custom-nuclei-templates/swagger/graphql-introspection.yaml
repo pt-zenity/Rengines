@@ -1,0 +1,64 @@
+id: swagger-graphql-introspection
+
+info:
+  name: GraphQL Introspection Enabled (API Schema Leak)
+  author: pt-zenity
+  severity: medium
+  description: |
+    GraphQL introspection is enabled, allowing attackers to query the full
+    API schema including all types, queries, mutations, and subscriptions.
+    This can reveal sensitive operations, input validation logic, and
+    internal data structures.
+  reference:
+    - https://graphql.org/learn/introspection/
+    - https://owasp.org/www-project-api-security/
+  classification:
+    cwe-id: CWE-200
+  tags: graphql,introspection,api,exposure
+
+http:
+  - raw:
+      - |
+        POST /graphql HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+        Accept: application/json
+
+        {"query":"{ __schema { queryType { name } types { name kind } } }"}
+
+      - |
+        POST /api/graphql HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+        Accept: application/json
+
+        {"query":"{ __schema { queryType { name } types { name kind } } }"}
+
+      - |
+        POST /graphql/v1 HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+
+        {"query":"{ __schema { types { name } } }"}
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        words:
+          - '"__schema"'
+          - '"types"'
+          - '"queryType"'
+        condition: and
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - '"name"\s*:\s*"(Query|Mutation|Subscription|[A-Z][a-zA-Z]+)"'

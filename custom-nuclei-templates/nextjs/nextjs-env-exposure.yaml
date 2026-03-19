@@ -1,0 +1,38 @@
+id: nextjs-env-exposure
+
+info:
+  name: Next.js NEXT_PUBLIC Environment Variable Exposure
+  author: pt-zenity
+  severity: medium
+  description: |
+    Next.js application is exposing environment variables prefixed with
+    NEXT_PUBLIC_ inside the compiled JavaScript bundle. These can include
+    API keys, endpoints, and internal configuration details.
+  reference:
+    - https://nextjs.org/docs/basic-features/environment-variables
+  tags: nextjs,env,exposure,config
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/_next/static/chunks/pages/_app.js"
+      - "{{BaseURL}}/_next/static/chunks/main.js"
+      - "{{BaseURL}}/_next/static/chunks/framework.js"
+      - "{{BaseURL}}/_next/static/chunks/webpack.js"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "NEXT_PUBLIC_[A-Z_]+=.{4,100}"
+          - "\"NEXT_PUBLIC_[A-Z_]+\":\"[^\"]{4,}\""
+
+      - type: regex
+        part: body
+        regex:
+          - "\"apiKey\":\"[A-Za-z0-9_\\-]{20,}\""
+          - "\"secretKey\":\"[A-Za-z0-9_\\-\\+\\/]{20,}\""
+          - "\"privateKey\":\"[A-Za-z0-9_\\-]{20,}\""

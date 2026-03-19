@@ -1,0 +1,46 @@
+id: nextjs-source-map-exposure
+
+info:
+  name: Next.js Source Map Exposed
+  author: pt-zenity
+  severity: high
+  description: |
+    Next.js application is exposing JavaScript source map files (.js.map).
+    Source maps contain the original TypeScript/JSX source code, which can
+    reveal business logic, API endpoints, secrets, and internal architecture.
+  reference:
+    - https://developer.chrome.com/blog/sourcemaps/
+  tags: nextjs,react,sourcemap,exposure,high
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/_next/static/chunks/main.js.map"
+      - "{{BaseURL}}/_next/static/chunks/pages/index.js.map"
+      - "{{BaseURL}}/_next/static/chunks/pages/_app.js.map"
+      - "{{BaseURL}}/_next/static/chunks/webpack.js.map"
+      - "{{BaseURL}}/_next/static/chunks/framework.js.map"
+      - "{{BaseURL}}/_next/static/chunks/pages/_error.js.map"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        words:
+          - '"mappings"'
+          - '"sources"'
+          - '"sourcesContent"'
+        condition: and
+
+      - type: word
+        part: header
+        words:
+          - "application/json"
+          - "text/javascript"
+        condition: or

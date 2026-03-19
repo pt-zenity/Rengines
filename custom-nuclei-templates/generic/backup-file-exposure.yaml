@@ -1,0 +1,61 @@
+id: generic-backup-file-exposure
+
+info:
+  name: Backup / Archive File Exposure
+  author: pt-zenity
+  severity: high
+  description: |
+    Web application is exposing backup files, archive files, or database dumps.
+    These files may contain the complete source code, database contents,
+    configuration files, and sensitive credentials.
+  reference:
+    - https://owasp.org/www-community/attacks/Forced_browsing
+  classification:
+    cwe-id: CWE-552
+  tags: backup,exposure,high,files
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/backup.zip"
+      - "{{BaseURL}}/backup.tar.gz"
+      - "{{BaseURL}}/backup.sql"
+      - "{{BaseURL}}/backup.sql.gz"
+      - "{{BaseURL}}/backup.tar"
+      - "{{BaseURL}}/database.sql"
+      - "{{BaseURL}}/db.sql"
+      - "{{BaseURL}}/dump.sql"
+      - "{{BaseURL}}/site.zip"
+      - "{{BaseURL}}/www.zip"
+      - "{{BaseURL}}/htdocs.zip"
+      - "{{BaseURL}}/public_html.zip"
+      - "{{BaseURL}}/web.zip"
+      - "{{BaseURL}}/source.zip"
+      - "{{BaseURL}}/code.zip"
+      - "{{BaseURL}}/app.zip"
+      - "{{BaseURL}}/project.zip"
+      - "{{BaseURL}}/files.tar.gz"
+      - "{{BaseURL}}/logs.zip"
+      - "{{BaseURL}}/config.zip"
+      - "{{BaseURL}}/data.zip"
+      - "{{BaseURL}}/data.sql"
+      - "{{BaseURL}}/export.sql"
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: dsl
+        dsl:
+          - "content_length > 512"
+
+      - type: regex
+        part: header
+        regex:
+          - "(?i)content-type: application/(zip|x-tar|gzip|x-gzip|sql|octet-stream|x-zip-compressed)"
+          - "(?i)content-disposition: attachment"
+        condition: or

