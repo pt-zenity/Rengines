@@ -8,6 +8,8 @@ info:
     Next.js applications may be vulnerable to open redirect attacks through
     misconfigured redirect rules or the _next/image endpoint. Attackers can
     craft URLs that redirect users to malicious external sites.
+    Detection requires Location header to point directly to the external domain,
+    not an internal login redirect containing the URL as parameter.
   reference:
     - https://nextjs.org/docs/api-reference/next/image
   tags: nextjs,redirect,open-redirect
@@ -16,30 +18,24 @@ http:
   - method: GET
     path:
       - "{{BaseURL}}/_next/image?url=https://evil.com&w=128&q=75"
-      - "{{BaseURL}}/?redirect=https://evil.com"
-      - "{{BaseURL}}/?next=https://evil.com"
-      - "{{BaseURL}}/?url=https://evil.com"
       - "{{BaseURL}}/api/auth/callback/credentials?callbackUrl=https://evil.com"
 
     stop-at-first-match: false
 
-    matchers-condition: or
+    # Only match if Location header points DIRECTLY to evil.com (not as a query param)
+    matchers-condition: and
     matchers:
-      - type: regex
-        part: header
-        regex:
-          - "(?i)location: https?://evil\\.com"
-          - "(?i)location: //evil\\.com"
-
-      - type: word
-        part: body
-        words:
-          - "evil.com"
-        condition: and
-
       - type: status
         status:
           - 301
           - 302
           - 307
           - 308
+
+      - type: word
+        part: header
+        words:
+          - "location: https://evil.com"
+          - "location: http://evil.com"
+          - "location: //evil.com"
+        condition: or

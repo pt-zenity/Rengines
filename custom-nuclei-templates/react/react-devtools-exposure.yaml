@@ -1,14 +1,13 @@
 id: react-devtools-exposure
 
 info:
-  name: React DevTools / Debug Build Exposed in Production
+  name: React DevTools / Development Build Exposed in Production
   author: pt-zenity
   severity: medium
   description: |
     React application is running a development build in production.
     Development builds expose internal component tree structure, Redux state,
     prop types, and detailed error messages that can aid in reconnaissance.
-    Additionally, React DevTools hooks may be present allowing component inspection.
   reference:
     - https://reactjs.org/docs/optimizing-performance.html
   tags: react,devtools,debug,exposure
@@ -16,33 +15,32 @@ info:
 http:
   - method: GET
     path:
-      - "{{BaseURL}}"
       - "{{BaseURL}}/static/js/main.js"
       - "{{BaseURL}}/static/js/bundle.js"
       - "{{BaseURL}}/static/js/vendor.js"
 
     stop-at-first-match: false
 
-    matchers-condition: or
+    # Must return 200 with JS content AND contain actual dev-mode React markers
+    matchers-condition: and
     matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "text/javascript"
+          - "application/javascript"
+        condition: or
+
       - type: word
         part: body
         words:
           - "__REACT_DEVTOOLS_GLOBAL_HOOK__"
           - "react-dom.development.js"
-          - "process.env.NODE_ENV !== 'production'"
-        condition: or
-
-      - type: word
-        part: body
-        words:
+          - "__REDUX_DEVTOOLS_EXTENSION__"
           - "Warning: Each child in a list should have a unique"
           - "Warning: Failed prop type"
-          - "Warning: React does not recognize"
         condition: or
-
-      - type: regex
-        part: body
-        regex:
-          - "React version: [0-9]+\\.[0-9]+"
-          - "__REDUX_DEVTOOLS_EXTENSION__"

@@ -1,12 +1,12 @@
 id: swagger-auth-bypass
 
 info:
-  name: Swagger API Authentication Bypass / Test Endpoint
+  name: Swagger API Authentication Bypass / Unauthenticated JSON Data Exposure
   author: pt-zenity
   severity: high
   description: |
-    Swagger/OpenAPI endpoints may be accessible without authentication
-    or with default credentials. Test endpoints and debug APIs often
+    Swagger/OpenAPI endpoints are accessible without authentication and
+    returning JSON data with sensitive fields. Test endpoints and debug APIs often
     bypass authentication middleware in development configurations.
   reference:
     - https://owasp.org/www-project-api-security/
@@ -26,7 +26,6 @@ http:
       - "{{BaseURL}}/api/internal"
       - "{{BaseURL}}/api/private"
       - "{{BaseURL}}/api/system"
-      - "{{BaseURL}}/api/health"
       - "{{BaseURL}}/api/metrics"
       - "{{BaseURL}}/api/actuator"
       - "{{BaseURL}}/api/actuator/env"
@@ -37,6 +36,7 @@ http:
 
     stop-at-first-match: false
 
+    # Must return 200 JSON with non-trivial content containing real sensitive data fields
     matchers-condition: and
     matchers:
       - type: status
@@ -50,11 +50,13 @@ http:
 
       - type: dsl
         dsl:
-          - "len(body) > 5"
+          - "len(body) > 20"
 
-    extractors:
       - type: regex
         part: body
         regex:
-          - '"(email|username|password|token|api_key|secret)"\s*:\s*"[^"]{1,200}"'
-          - '"(role|admin|superuser|is_admin)"\s*:\s*(true|"admin"|1)'
+          # Real sensitive data — email, password hash, token, role info
+          - '"(email|username|password|token|api_key|secret)"\s*:\s*"[^"]{3,}'
+          - '"(role|admin|is_admin|superuser)"\s*:\s*(true|"admin"|1)'
+          - '"(id|uid|user_id)"\s*:\s*\d+'
+        condition: or

@@ -1,13 +1,13 @@
 id: livewire-component-exposure
 
 info:
-  name: Livewire Component Debug / Exposure
+  name: Livewire Component JS File Accessible
   author: pt-zenity
   severity: medium
   description: |
-    Laravel Livewire application is exposing component information or debug data.
-    Livewire components can leak internal state, component names, class paths,
-    and data when misconfigured or when debug mode is enabled.
+    Laravel Livewire JavaScript library is publicly accessible.
+    This confirms a Livewire-based application, enabling targeted attack
+    enumeration against Livewire endpoints and component state.
   reference:
     - https://livewire.laravel.com
   tags: livewire,laravel,exposure,debug
@@ -15,31 +15,32 @@ info:
 http:
   - method: GET
     path:
-      - "{{BaseURL}}/livewire"
       - "{{BaseURL}}/livewire/livewire.js"
       - "{{BaseURL}}/livewire/livewire.min.js"
-      - "{{BaseURL}}/livewire/message"
-      - "{{BaseURL}}/livewire/upload-file"
       - "{{BaseURL}}/vendor/livewire/livewire.js"
       - "{{BaseURL}}/vendor/livewire/livewire.min.js"
 
     stop-at-first-match: false
 
-    matchers-condition: or
+    # Must return 200 with actual JS content containing Livewire code
+    matchers-condition: and
     matchers:
+      - type: status
+        status:
+          - 200
+
       - type: word
-        part: body
+        part: header
         words:
-          - "livewire"
-          - "Livewire"
-          - "window.livewire"
-          - "window.Livewire"
-        condition: and
+          - "text/javascript"
+          - "application/javascript"
+        condition: or
 
       - type: word
         part: body
         words:
-          - "wire:id"
-          - "wire:data"
-          - "wire:initial-data"
+          - "window.livewire"
+          - "window.Livewire"
+          - "Livewire.start"
+          - "livewire/message"
         condition: or

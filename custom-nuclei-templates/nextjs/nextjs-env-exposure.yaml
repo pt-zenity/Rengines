@@ -22,17 +22,25 @@ http:
 
     stop-at-first-match: false
 
-    matchers-condition: or
+    # Must return 200 with JS content AND contain actual env vars
+    matchers-condition: and
     matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "text/javascript"
+          - "application/javascript"
+        condition: or
+
       - type: regex
         part: body
         regex:
           - "NEXT_PUBLIC_[A-Z_]+=.{4,100}"
           - "\"NEXT_PUBLIC_[A-Z_]+\":\"[^\"]{4,}\""
-
-      - type: regex
-        part: body
-        regex:
           - "\"apiKey\":\"[A-Za-z0-9_\\-]{20,}\""
           - "\"secretKey\":\"[A-Za-z0-9_\\-\\+\\/]{20,}\""
-          - "\"privateKey\":\"[A-Za-z0-9_\\-]{20,}\""
+        condition: or

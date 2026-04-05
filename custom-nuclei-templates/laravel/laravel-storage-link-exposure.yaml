@@ -1,11 +1,11 @@
 id: laravel-storage-link-exposure
 
 info:
-  name: Laravel Storage / Upload Directory Exposure
+  name: Laravel Storage / Log File Exposure
   author: pt-zenity
   severity: high
   description: |
-    Laravel application is exposing files in the storage/uploads directory.
+    Laravel application is exposing files in the storage directory or log files.
     This can allow attackers to access uploaded files, backup files, logs,
     or even execute uploaded PHP webshells if the directory is misconfigured.
   reference:
@@ -17,20 +17,49 @@ info:
 http:
   - method: GET
     path:
-      - "{{BaseURL}}/storage"
-      - "{{BaseURL}}/storage/app"
-      - "{{BaseURL}}/storage/app/public"
-      - "{{BaseURL}}/storage/logs"
       - "{{BaseURL}}/storage/logs/laravel.log"
-      - "{{BaseURL}}/storage/framework/cache"
-      - "{{BaseURL}}/public/storage"
-      - "{{BaseURL}}/uploads"
-      - "{{BaseURL}}/public/uploads"
+      - "{{BaseURL}}/storage/logs/laravel-{{date}}.log"
+      - "{{BaseURL}}/storage/app/public"
+
+    payloads:
+      date:
+        - "2024-01-01"
+        - "2025-01-01"
+        - "2026-01-01"
 
     stop-at-first-match: false
 
-    matchers-condition: or
+    # Must return 200 AND contain actual log content - directory listing OR laravel log entries
+    matchers-condition: and
     matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        words:
+          - "[2024"
+          - "[2025"
+          - "[2026"
+          - "production.ERROR"
+          - "local.ERROR"
+          - "Stack trace:"
+          - "Index of /"
+        condition: or
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/storage"
+      - "{{BaseURL}}/uploads"
+      - "{{BaseURL}}/public/uploads"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
       - type: word
         part: body
         words:
@@ -38,17 +67,3 @@ http:
           - "[DIR]"
           - "Parent Directory"
         condition: or
-
-      - type: word
-        part: body
-        words:
-          - "[2"
-          - "production.ERROR"
-          - "local.ERROR"
-          - "Stack trace:"
-        condition: and
-
-      - type: status
-        status:
-          - 200
-        condition: and

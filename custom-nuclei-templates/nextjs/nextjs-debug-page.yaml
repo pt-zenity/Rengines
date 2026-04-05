@@ -17,34 +17,28 @@ http:
     path:
       - "{{BaseURL}}/_next/static/chunks/pages/_error.js"
       - "{{BaseURL}}/_next/static/development/_error.js"
-      - "{{BaseURL}}/404"
-      - "{{BaseURL}}/500"
 
     stop-at-first-match: false
 
-    matchers-condition: or
+    # Must return 200 with actual Next.js JS content - not login redirect
+    matchers-condition: and
     matchers:
+      - type: status
+        status:
+          - 200
+
       - type: word
-        part: body
+        part: header
         words:
-          - "__NEXT_DATA__"
-          - "_next/static"
-          - "getServerSideProps"
+          - "text/javascript"
+          - "application/javascript"
         condition: or
 
       - type: word
         part: body
         words:
-          - "at Object.getServerSideProps"
-          - "at Module.render"
           - "webpack-internal://"
           - "node_modules/next"
-        condition: or
-
-      - type: word
-        part: body
-        words:
-          - "Application error: a client-side exception has occurred"
-          - "ChunkLoadError"
-          - "Loading chunk"
+          - "getServerSideProps"
+          - "__NEXT_DATA__"
         condition: or

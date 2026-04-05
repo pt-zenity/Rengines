@@ -21,32 +21,32 @@ info:
   tags: cve,laravel,debug,rce,critical,ignition
 
 http:
+  # Step 1: Detect Laravel debug page or Ignition health-check
   - method: GET
     path:
-      - "{{BaseURL}}"
       - "{{BaseURL}}/_ignition/health-check"
 
     stop-at-first-match: false
 
-    matchers-condition: or
+    matchers-condition: and
     matchers:
+      - type: status
+        status:
+          - 200
+
       - type: word
-        part: body
+        part: header
         words:
-          - "Whoops! There was an error."
-          - "Laravel"
-          - "Illuminate\\"
-          - "APP_DEBUG"
-          - "Ignition"
-        condition: and
+          - "application/json"
 
       - type: word
         part: body
         words:
           - "canExecuteSolutions"
-          - "ignition/execute-solution"
+          - "ignition"
         condition: or
 
+  # Step 2: Test actual RCE endpoint
   - raw:
       - |
         POST /_ignition/execute-solution HTTP/1.1
@@ -61,6 +61,11 @@ http:
       - type: status
         status:
           - 200
+
+      - type: word
+        part: header
+        words:
+          - "application/json"
 
       - type: word
         part: body

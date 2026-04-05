@@ -26,8 +26,17 @@ http:
 
         {"fingerprint":{"id":"test","name":"livewire-component","locale":"en","path":"/","method":"GET","v":"acj"},"serverMemo":{"children":[],"errors":[],"htmlHash":"test","data":{},"dataMeta":[],"checksum":"test"},"updates":[{"type":"syncInput","payload":{"id":"test","name":"url","value":"http://169.254.169.254/latest/meta-data/"}}]}
 
-    matchers-condition: or
+    matchers-condition: and
     matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "application/json"
+
       - type: word
         part: body
         words:
@@ -35,11 +44,3 @@ http:
           - '"serverMemo"'
           - '"fingerprint"'
         condition: and
-
-      - type: word
-        part: body
-        words:
-          - "169.254.169.254"
-          - "ami-id"
-          - "instance-type"
-        condition: or

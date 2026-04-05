@@ -1,13 +1,13 @@
 id: nextjs-api-routes-enum
 
 info:
-  name: Next.js API Routes Enumeration
+  name: Next.js API Routes Enumeration - Unauthenticated JSON Response
   author: pt-zenity
   severity: medium
   description: |
-    Next.js application exposes common API routes that may be unauthenticated
-    or return sensitive data. Common misconfigurations include exposed
-    /api/auth, /api/user, /api/admin endpoints accessible without authentication.
+    Next.js application exposes API routes that return JSON data without authentication.
+    Common misconfigurations include exposed /api/auth, /api/user, /api/admin
+    endpoints accessible without authentication.
   reference:
     - https://nextjs.org/docs/api-routes/introduction
   tags: nextjs,api,exposure,enum
@@ -34,6 +34,7 @@ http:
 
     stop-at-first-match: false
 
+    # Must return 200 with JSON - not a redirect/HTML error page
     matchers-condition: and
     matchers:
       - type: status
@@ -45,11 +46,12 @@ http:
         words:
           - "application/json"
 
-      - type: word
+      - type: regex
         part: body
-        words:
-          - "{"
-        condition: and
+        # Must contain actual data fields, not just empty/error JSON
+        regex:
+          - '"(email|username|name|role|id|token|key|secret|user|session|status|version)"\s*:\s*[\"\d\{]'
+        condition: or
 
     extractors:
       - type: regex

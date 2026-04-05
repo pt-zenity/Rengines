@@ -5,7 +5,7 @@ info:
   author: pt-zenity
   severity: medium
   description: |
-    Swagger UI or OpenAPI documentation is publicly accessible.
+    Swagger UI or OpenAPI documentation is publicly accessible without authentication.
     This exposes all API endpoints, parameters, authentication methods,
     and potentially sensitive business logic. Can aid attackers in
     enumerating and targeting API endpoints.
@@ -42,8 +42,22 @@ http:
 
     stop-at-first-match: false
 
-    matchers-condition: or
+    # Must return 200 AND contain Swagger/OpenAPI content - prevents FP on 302 login redirects
+    matchers-condition: and
     matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "text/html"
+          - "application/json"
+          - "application/yaml"
+          - "text/yaml"
+        condition: or
+
       - type: word
         part: body
         words:
@@ -51,22 +65,8 @@ http:
           - "SwaggerUI"
           - "swagger.io"
           - "Swagger UI"
-        condition: or
-
-      - type: word
-        part: body
-        words:
           - '"swagger":'
           - '"openapi":'
-          - '"info":'
-          - '"paths":'
-        condition: and
-
-      - type: word
-        part: header
-        words:
-          - "swagger-ui"
-          - "swagger.json"
         condition: or
 
     extractors:
