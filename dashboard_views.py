@@ -1,4 +1,5 @@
 from datetime import timedelta
+import io
 import json
 import logging
 import os
@@ -8,6 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 import threading
+import time
 
 from django.contrib import messages
 from django.http import FileResponse, Http404
@@ -693,7 +695,6 @@ def backup_source_code(request):
     if request.method != "POST":
         return JsonResponse({"status": False, "error": "Method not allowed"}, status=405)
 
-    import time
     backup_id = f"backup_{int(time.time())}"
     timestamp = django_now().strftime("%Y%m%d_%H%M%S")
     backup_filename = f"rengine_backup_{timestamp}.tar.gz"
@@ -768,4 +769,382 @@ def backup_delete(request, filename):
         os.remove(fpath)
         return JsonResponse({"status": True, "message": f"Backup {safe_name} berhasil dihapus"})
     except OSError as e:
+        return JsonResponse({"status": False, "error": str(e)})
+
+
+# ==============================================================================
+# GOOGLE DRIVE BACKUP FEATURE
+# ==============================================================================
+# Credential disimpan di Redis key "gdrive_credentials" (JSON service-account)
+# atau bisa pakai OAuth2 via flow.  Folder ID target: 0AMzZ2vjfVdc1Uk9PVA
+# ==============================================================================
+
+GDRIVE_FOLDER_ID_DEFAULT = "0AMzZ2vjfVdc1Uk9PVA"
+GDRIVE_CRED_REDIS_KEY = "gdrive_service_account_json"
+GDRIVE_TOKEN_REDIS_KEY = "gdrive_oauth_token_json"
+GDRIVE_UPLOAD_PROGRESS_KEY = "gdrive_upload_progress:{upload_id}"
+
+# ------------ helpers ---------------------------------------------------------
+
+def _gdrive_get_service_account_json():
+    """Ambil service-account JSON dari Redis."""
+    r = _get_redis()
+    if r:
+        val = r.get(GDRIVE_CRED_REDIS_KEY)
+        if val:
+            return json.loads(val)
+    return None
+
+
+def _gdrive_save_service_account_json(data: dict):
+    r = _get_redis()
+    if r:
+        r.set(GDRIVE_CRED_REDIS_KEY, json.dumps(data))
+        return True
+    return False
+
+
+def _gdrive_get_oauth_token():
+    r = _get_redis()
+    if r:
+        val = r.get(GDRIVE_TOKEN_REDIS_KEY)
+        if val:
+            return json.loads(val)
+    return None
+
+
+def _gdrive_save_oauth_token(token_data: dict):
+    r = _get_redis()
+    if r:
+        r.set(GDRIVE_TOKEN_REDIS_KEY, json.dumps(token_data))
+        return True
+    return False
+
+
+def _gdrive_build_service():
+    """
+    Build Google Drive API service.
+    Priority: Service Account JSON → OAuth2 token
+    """
+    try:
+        from google.oauth2 import service_account
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+
+        sa_json = _gdrive_get_service_account_json()
+        if sa_json:
+            creds = service_account.Credentials.from_service_account_info(
+                sa_json,
+                scopes=["https://www.googleapis.com/auth/drive"],
+            )
+            return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+        token_data = _gdrive_get_oauth_token()
+        if token_data:
+            creds = Credentials.from_authorized_user_info(token_data)
+            return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+        return None
+    except Exception as e:
+        logger.error(f"[GDrive] build_service error: {e}")
+        return None
+
+
+def _set_upload_progress(upload_id, data):
+    r = _get_redis()
+    key = GDRIVE_UPLOAD_PROGRESS_KEY.format(upload_id=upload_id)
+    if r:
+        r.setex(key, 3600, json.dumps(data))
+    else:
+        with _backup_lock:
+            _backup_progress_mem[key] = data
+
+
+def _get_upload_progress(upload_id):
+    r = _get_redis()
+    key = GDRIVE_UPLOAD_PROGRESS_KEY.format(upload_id=upload_id)
+    if r:
+        val = r.get(key)
+        if val:
+            return json.loads(val)
+    return _backup_progress_mem.get(key, {"status": "not_found", "progress": 0, "message": "Upload tidak ditemukan"})
+
+
+def _do_gdrive_upload(upload_id, local_path, folder_id):
+    """Upload file backup ke Google Drive di background thread."""
+    try:
+        from googleapiclient.http import MediaFileUpload
+
+        _set_upload_progress(upload_id, {"status": "running", "progress": 5, "message": "Menghubungkan ke Google Drive..."})
+
+        service = _gdrive_build_service()
+        if not service:
+            _set_upload_progress(upload_id, {"status": "error", "progress": 0, "message": "Google Drive tidak terkonfigurasi. Silakan upload credentials terlebih dahulu."})
+            return
+
+        filename = os.path.basename(local_path)
+        file_size = os.path.getsize(local_path)
+
+        _set_upload_progress(upload_id, {"status": "running", "progress": 10, "message": f"Mengupload {filename} ({_human_size(file_size)})..."})
+
+        # Check if file already exists → delete old
+        try:
+            existing = service.files().list(
+                q=f"name='{filename}' and '{folder_id}' in parents and trashed=false",
+                fields="files(id,name)",
+            ).execute()
+            for f in existing.get("files", []):
+                service.files().delete(fileId=f["id"]).execute()
+        except Exception:
+            pass
+
+        file_metadata = {
+            "name": filename,
+            "parents": [folder_id],
+        }
+        media = MediaFileUpload(
+            local_path,
+            mimetype="application/gzip",
+            resumable=True,
+            chunksize=4 * 1024 * 1024,  # 4 MB chunks
+        )
+
+        request_upload = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id,name,webViewLink,size",
+        )
+
+        response = None
+        while response is None:
+            status, response = request_upload.next_chunk()
+            if status:
+                pct = int(status.progress() * 90) + 10  # 10-100%
+                _set_upload_progress(upload_id, {
+                    "status": "running",
+                    "progress": pct,
+                    "message": f"Mengupload... {pct}%",
+                })
+
+        file_id = response.get("id", "")
+        web_link = response.get("webViewLink", f"https://drive.google.com/file/d/{file_id}/view")
+
+        _set_upload_progress(upload_id, {
+            "status": "done",
+            "progress": 100,
+            "message": f"Upload selesai! File tersimpan di Google Drive.",
+            "file_id": file_id,
+            "web_link": web_link,
+            "filename": filename,
+        })
+
+    except Exception as e:
+        logger.error(f"[GDrive] upload error: {e}")
+        _set_upload_progress(upload_id, {
+            "status": "error",
+            "progress": 0,
+            "message": f"Error upload: {str(e)}",
+        })
+
+
+def _gdrive_list_backups(folder_id):
+    """Ambil daftar file backup dari folder Google Drive."""
+    try:
+        service = _gdrive_build_service()
+        if not service:
+            return []
+        result = service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false and name contains 'rengine_backup_'",
+            fields="files(id,name,size,createdTime,webViewLink,modifiedTime)",
+            orderBy="createdTime desc",
+            pageSize=50,
+        ).execute()
+        files = result.get("files", [])
+        out = []
+        for f in files:
+            sz = int(f.get("size", 0))
+            out.append({
+                "id": f["id"],
+                "filename": f["name"],
+                "size": sz,
+                "size_human": _human_size(sz),
+                "created_time": f.get("createdTime", ""),
+                "modified_time": f.get("modifiedTime", ""),
+                "web_link": f.get("webViewLink", f"https://drive.google.com/file/d/{f['id']}/view"),
+            })
+        return out
+    except Exception as e:
+        logger.error(f"[GDrive] list_backups error: {e}")
+        return []
+
+
+# ------------ views -----------------------------------------------------------
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def gdrive_status(request):
+    """Cek status koneksi Google Drive dan daftar file backup."""
+    sa = _gdrive_get_service_account_json()
+    oauth = _gdrive_get_oauth_token()
+
+    auth_method = None
+    service_account_email = None
+    if sa:
+        auth_method = "service_account"
+        service_account_email = sa.get("client_email", "")
+    elif oauth:
+        auth_method = "oauth2"
+    else:
+        return JsonResponse({"status": False, "connected": False, "message": "Belum terkonfigurasi"})
+
+    # Test connection
+    try:
+        service = _gdrive_build_service()
+        if not service:
+            return JsonResponse({"status": False, "connected": False, "message": "Gagal membuat koneksi"})
+
+        folder_id = request.GET.get("folder_id", GDRIVE_FOLDER_ID_DEFAULT)
+
+        # Try to get folder info
+        try:
+            folder_info = service.files().get(fileId=folder_id, fields="id,name").execute()
+            folder_name = folder_info.get("name", folder_id)
+        except Exception:
+            folder_name = folder_id
+
+        # List backup files
+        backups = _gdrive_list_backups(folder_id)
+
+        return JsonResponse({
+            "status": True,
+            "connected": True,
+            "auth_method": auth_method,
+            "service_account_email": service_account_email,
+            "folder_id": folder_id,
+            "folder_name": folder_name,
+            "backups": backups,
+            "backup_count": len(backups),
+        })
+    except Exception as e:
+        return JsonResponse({"status": False, "connected": False, "message": str(e)})
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def gdrive_upload_backup(request):
+    """Upload file backup lokal ke Google Drive."""
+    if request.method != "POST":
+        return JsonResponse({"status": False, "error": "Method not allowed"}, status=405)
+
+    data = json.loads(request.body) if request.content_type == "application/json" else request.POST
+    filename = data.get("filename", "")
+    folder_id = data.get("folder_id", GDRIVE_FOLDER_ID_DEFAULT)
+
+    safe_name = _safe_filename(filename)
+    if not safe_name:
+        return JsonResponse({"status": False, "error": "Nama file tidak valid"})
+
+    fpath = os.path.join(_get_backup_dir(), safe_name)
+    if not os.path.isfile(fpath):
+        return JsonResponse({"status": False, "error": "File backup tidak ditemukan"})
+
+    # Cek apakah sudah ada credentials
+    if not _gdrive_get_service_account_json() and not _gdrive_get_oauth_token():
+        return JsonResponse({"status": False, "error": "Google Drive belum terkonfigurasi. Upload Service Account JSON terlebih dahulu."})
+
+    upload_id = f"gdrive_{int(time.time())}"
+    _set_upload_progress(upload_id, {"status": "starting", "progress": 0, "message": "Memulai upload..."})
+
+    t = threading.Thread(
+        target=_do_gdrive_upload,
+        args=(upload_id, fpath, folder_id),
+        daemon=True,
+    )
+    t.start()
+
+    return JsonResponse({"status": True, "upload_id": upload_id, "filename": safe_name})
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def gdrive_upload_progress(request, upload_id):
+    """Cek progress upload ke Google Drive."""
+    data = _get_upload_progress(upload_id)
+    return JsonResponse(data)
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def gdrive_save_credentials(request):
+    """
+    Simpan Service Account JSON credentials ke Redis.
+    Body: { "credentials_json": "<raw JSON string>" }
+    """
+    if request.method != "POST":
+        return JsonResponse({"status": False, "error": "Method not allowed"}, status=405)
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"status": False, "error": "Body harus berupa JSON"})
+
+    cred_raw = body.get("credentials_json", "")
+    if not cred_raw:
+        return JsonResponse({"status": False, "error": "credentials_json wajib diisi"})
+
+    try:
+        cred_data = json.loads(cred_raw) if isinstance(cred_raw, str) else cred_raw
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"status": False, "error": "credentials_json bukan JSON yang valid"})
+
+    # Validasi minimal field service account
+    required_fields = ["type", "project_id", "private_key", "client_email"]
+    missing = [f for f in required_fields if f not in cred_data]
+    if missing:
+        return JsonResponse({"status": False, "error": f"Field wajib tidak ada: {', '.join(missing)}"})
+
+    if cred_data.get("type") != "service_account":
+        return JsonResponse({"status": False, "error": "Hanya Service Account JSON yang didukung"})
+
+    if not _gdrive_save_service_account_json(cred_data):
+        return JsonResponse({"status": False, "error": "Gagal menyimpan ke Redis"})
+
+    # Test connection
+    try:
+        service = _gdrive_build_service()
+        if service:
+            about = service.files().list(pageSize=1, fields="files(id)").execute()
+            return JsonResponse({
+                "status": True,
+                "message": "Credentials berhasil disimpan dan koneksi Google Drive berhasil!",
+                "service_account_email": cred_data.get("client_email"),
+            })
+        else:
+            return JsonResponse({"status": False, "error": "Credentials disimpan tapi gagal konek ke Google Drive"})
+    except Exception as e:
+        return JsonResponse({"status": False, "error": f"Credentials disimpan tapi koneksi gagal: {str(e)}"})
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def gdrive_delete_credentials(request):
+    """Hapus credentials Google Drive dari Redis."""
+    if request.method != "POST":
+        return JsonResponse({"status": False, "error": "Method not allowed"}, status=405)
+
+    r = _get_redis()
+    if r:
+        r.delete(GDRIVE_CRED_REDIS_KEY)
+        r.delete(GDRIVE_TOKEN_REDIS_KEY)
+    return JsonResponse({"status": True, "message": "Credentials Google Drive berhasil dihapus"})
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def gdrive_delete_remote(request, file_id):
+    """Hapus file backup dari Google Drive."""
+    if request.method != "POST":
+        return JsonResponse({"status": False, "error": "Method not allowed"}, status=405)
+
+    try:
+        service = _gdrive_build_service()
+        if not service:
+            return JsonResponse({"status": False, "error": "Google Drive tidak terkonfigurasi"})
+        service.files().delete(fileId=file_id).execute()
+        return JsonResponse({"status": True, "message": "File berhasil dihapus dari Google Drive"})
+    except Exception as e:
         return JsonResponse({"status": False, "error": str(e)})

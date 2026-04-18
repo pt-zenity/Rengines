@@ -23,6 +23,13 @@ urlpatterns = [
     path("backup/download/<str:filename>/", views.backup_download, name="backup_download"),
     path("backup/delete/<str:filename>/", views.backup_delete, name="backup_delete"),
     path("backup/list/", views.backup_list, name="backup_list"),
+    # Google Drive Backup
+    path("gdrive/status/", views.gdrive_status, name="gdrive_status"),
+    path("gdrive/upload/", views.gdrive_upload_backup, name="gdrive_upload_backup"),
+    path("gdrive/upload/progress/<str:upload_id>/", views.gdrive_upload_progress, name="gdrive_upload_progress"),
+    path("gdrive/credentials/save/", views.gdrive_save_credentials, name="gdrive_save_credentials"),
+    path("gdrive/credentials/delete/", views.gdrive_delete_credentials, name="gdrive_delete_credentials"),
+    path("gdrive/remote/delete/<str:file_id>/", views.gdrive_delete_remote, name="gdrive_delete_remote"),
     # API Keys management
     path("api-keys/", views.api_key_management, name="api_keys"),
     path("api-keys/create/", views.create_api_key, name="create_api_key"),
