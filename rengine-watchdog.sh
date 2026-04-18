@@ -11,7 +11,7 @@ if [ -f "$LOG" ] && [ $(stat -c%s "$LOG" 2>/dev/null || echo 0) -gt $MAX_LOG_SIZ
 fi
 
 # Cek apakah web bisa diakses via HTTPS
-HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 https://127.0.0.1/ 2>/dev/null)
+HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 https://127.0.0.1:9191/ 2>/dev/null)
 
 if [ "$HTTP_CODE" = "000" ] || [ "$HTTP_CODE" = "502" ] || [ "$HTTP_CODE" = "503" ]; then
     echo "[$(date)] WARNING: Web not accessible (HTTP $HTTP_CODE). Attempting fix..." >> $LOG
@@ -26,7 +26,7 @@ if [ "$HTTP_CODE" = "000" ] || [ "$HTTP_CODE" = "502" ] || [ "$HTTP_CODE" = "503
         sleep 2
         
         # Verifikasi setelah reload
-        HTTP_CODE2=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 https://127.0.0.1/ 2>/dev/null)
+        HTTP_CODE2=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 https://127.0.0.1:9191/ 2>/dev/null)
         echo "[$(date)] After nginx reload: HTTP $HTTP_CODE2" >> $LOG
     else
         # Web tidak healthy - restart web container
