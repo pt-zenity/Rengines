@@ -1,0 +1,723 @@
+{% extends 'base/base.html' %}
+{% load humanize %}
+{% load permission_tags %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}
+Admin Settings
+{% endblock title %}
+
+{% block custom_js_css_link %}
+<style>
+/* ── Backup Section Styles ─────────────────────────────── */
+#backup-progress-wrap { display: none; }
+.backup-file-row:hover { background: rgba(114,105,239,.06); }
+.backup-size-badge { font-size: 11px; }
+.backup-action-btn { padding: 2px 8px; font-size: 12px; }
+#backup-log {
+  background: #1a1a2e;
+  color: #a0e4b0;
+  font-family: monospace;
+  font-size: 12px;
+  border-radius: 6px;
+  padding: 12px;
+  min-height: 56px;
+  max-height: 100px;
+  overflow-y: auto;
+  border: 1px solid #2a2a3e;
+}
+.progress { border-radius: 10px; }
+.progress-bar { transition: width .4s ease; border-radius: 10px; }
+</style>
+{% endblock custom_js_css_link %}
+
+{% block page_title %}
+Admin Settings
+{% endblock page_title %}
+
+{% block breadcrumb_title %}
+<li class="breadcrumb-item"><a href="{% url 'dashboardIndex' current_project.slug %}">Dashboard</a></li>
+<li class="breadcrumb-item active">Admin Settings</li>
+{% endblock breadcrumb_title %}
+
+{% block main_content %}
+
+<!-- ── Action bar ──────────────────────────────────────────── -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body py-2">
+        <div class="d-flex flex-wrap gap-2 justify-content-end align-items-center">
+          <button type="button" class="btn btn-soft-info waves-effect waves-light"
+                  onclick="openBackupSection()">
+            <i class="mdi mdi-archive-arrow-down me-1"></i> Source Backup
+          </button>
+          <button type="button" class="btn btn-primary waves-effect waves-light"
+                  onclick="create_user_modal()">
+            <i class="mdi mdi-plus-circle me-1"></i> Add User
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Backup Section ─────────────────────────────────────── -->
+<div class="row" id="backup-section" style="display:none!important;">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-soft-info d-flex align-items-center justify-content-between py-2">
+        <h5 class="mb-0 text-info">
+          <i class="mdi mdi-archive-arrow-down me-2"></i>
+          Source Code Backup
+        </h5>
+        <button class="btn btn-sm btn-outline-secondary" onclick="closeBackupSection()">
+          <i class="mdi mdi-close"></i>
+        </button>
+      </div>
+      <div class="card-body">
+
+        <!-- Info & trigger -->
+        <div class="row align-items-center mb-3">
+          <div class="col-md-8">
+            <p class="mb-1 text-muted" style="font-size:13px;">
+              Buat arsip <code>.tar.gz</code> dari seluruh source code reNgine
+              (<code>/home/rengine/rengine</code>).
+              File dikecualikan: <code>__pycache__</code>, <code>*.pyc</code>,
+              <code>staticfiles</code>, <code>*.log</code>, <code>.env</code>, <code>secrets</code>.
+            </p>
+            <p class="mb-0 text-muted" style="font-size:12px;">
+              <i class="mdi mdi-information-outline"></i>
+              Maksimum <strong>10 backup</strong> disimpan; backup terlama otomatis dihapus.
+            </p>
+          </div>
+          <div class="col-md-4 text-md-end mt-2 mt-md-0">
+            <button id="btn-start-backup" class="btn btn-info waves-effect waves-light"
+                    onclick="startBackup()">
+              <i class="mdi mdi-play-circle me-1"></i> Buat Backup Sekarang
+            </button>
+          </div>
+        </div>
+
+        <!-- Progress -->
+        <div id="backup-progress-wrap" class="mb-3">
+          <div class="d-flex justify-content-between mb-1">
+            <small class="text-muted">Progress</small>
+            <small id="backup-pct-label" class="text-muted">0%</small>
+          </div>
+          <div class="progress mb-2" style="height:10px;">
+            <div id="backup-progress-bar"
+                 class="progress-bar bg-info progress-bar-striped progress-bar-animated"
+                 role="progressbar" style="width:0%"></div>
+          </div>
+          <div id="backup-log">Menginisialisasi...</div>
+        </div>
+
+        <!-- Backup list table -->
+        <hr class="mt-2 mb-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h6 class="mb-0"><i class="mdi mdi-folder-multiple me-1"></i> Daftar Backup</h6>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadBackupList()">
+            <i class="mdi mdi-refresh me-1"></i> Refresh
+          </button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-borderless mb-0" id="backup-table">
+            <thead class="table-light">
+              <tr>
+                <th style="width:44%">Nama File</th>
+                <th>Ukuran</th>
+                <th>Tanggal</th>
+                <th class="text-end">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="backup-tbody">
+              <tr>
+                <td colspan="4" class="text-center text-muted py-3">
+                  <span class="spinner-border spinner-border-sm me-2"></span>Memuat daftar backup...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div><!-- card-body -->
+    </div><!-- card -->
+  </div>
+</div><!-- row backup -->
+
+<!-- ── Users Table ────────────────────────────────────────── -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h4>Users</h4>
+        <div class="table-responsive pt-3">
+          <table class="table table-centered table-nowrap table-borderless mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Username</th>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Created on</th>
+                <th>Last Logged in</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for muser in users %}
+              <tr>
+                <th>
+                  {% if muser.is_superuser %}
+                    <span class="badge bg-soft-danger text-danger p-1">{{muser.username}}</span>
+                  {% elif muser|has_role:'sys_admin' %}
+                    <span class="badge bg-soft-success text-success p-1">{{muser.username}}</span>
+                  {% elif muser|has_role:'auditor' %}
+                    <span class="badge bg-soft-pink text-pink p-1">{{muser.username}}</span>
+                  {% else %}
+                    <span class="badge bg-soft-primary text-primary p-1">{{muser.username}}</span>
+                  {% endif %}
+                </th>
+                <th>
+                  {% if muser.get_full_name %}
+                  {{muser.get_full_name}}
+                  {% else %}
+                  {{muser.username}}
+                  {% endif %}
+                </th>
+                <th>
+                  {% if muser.is_superuser %}
+                    <span class="badge bg-soft-danger text-danger p-1">Super Admin</span>
+                  {% elif muser|has_role:'sys_admin' %}
+                    <span class="badge bg-soft-success text-success p-1">Sys Admin</span>
+                  {% elif muser|has_role:'auditor' %}
+                    <span class="badge bg-soft-pink text-pink p-1">Auditor</span>
+                  {% else %}
+                    <span class="badge bg-soft-primary text-primary p-1">Penetration Tester</span>
+                  {% endif %}
+                </th>
+                <td>{{muser.date_joined|naturaltime}}</td>
+                <td>
+                  {% if muser.last_login %}
+                    {{muser.last_login|naturaltime}}
+                  {% else %}
+                    <span class="badge bg-soft-danger text-danger p-1">Never Logged In</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if muser.is_active %}
+                  <span class="badge bg-soft-success text-success p-1">Active</span>
+                  {% else %}
+                  <span class="badge bg-soft-danger text-danger p-1">Disabled</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if user != muser %}
+                    {% if user.is_superuser and muser.is_superuser or user|has_role:'sys_admin' and not muser.is_superuser %}
+                      {# Show action buttons for: superuser->superuser or sys_admin->non-superuser #}
+                      {% if muser.is_active %}
+                        <a href="./update?mode=change_status&user={{ muser.id }}" class="action-icon"
+                           data-bs-toggle="tooltip" data-bs-placement="bottom" title="Disable Account">
+                           <i class="mdi mdi-account-cancel"></i>
+                        </a>
+                      {% else %}
+                        <a href="./update?mode=change_status&user={{ muser.id }}" class="action-icon"
+                           data-bs-toggle="tooltip" data-bs-placement="bottom" title="Enable Account">
+                           <i class="mdi mdi-account-check"></i>
+                        </a>
+                      {% endif %}
+                      {% with user_role=muser|get_user_role %}
+                      {% with user_projects=muser.projects.all|map:'id'|join:',' %}
+                        <a href="#" onclick="update_user_modal({{ muser.id }}, '{{ user_role }}', [{{ user_projects }}])"
+                          class="action-icon" id="change_user_details_btn" title="Update User Detail"
+                          data-bs-toggle="tooltip" data-bs-placement="bottom">
+                          <i class="mdi mdi-account-edit"></i>
+                        </a>
+                      {% endwith %}
+                      {% endwith %}
+                      <a href="#" onclick="delete_user({{ muser.id }}, '{{ muser.username }}')" class="action-icon"
+                        data-bs-toggle="tooltip" data-bs-placement="bottom" title="Delete Account">
+                        <i class="mdi mdi-trash-can"></i>
+                      </a>
+                    {% else %}
+                      &nbsp;
+                    {% endif %}
+                  {% else %}
+                    &nbsp;
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div> <!-- .table-responsive -->
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock main_content %}
+
+
+{% block page_level_script %}
+<script type="text/javascript">
+
+/* ═══════════════════════════════════════════════════════════
+   BACKUP FUNCTIONS
+   ═══════════════════════════════════════════════════════════ */
+
+var _backupPollTimer = null;
+
+function openBackupSection() {
+  var sec = document.getElementById('backup-section');
+  sec.style.removeProperty('display');
+  sec.style.setProperty('display', 'block', 'important');
+  loadBackupList();
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeBackupSection() {
+  var sec = document.getElementById('backup-section');
+  sec.style.setProperty('display', 'none', 'important');
+  clearInterval(_backupPollTimer);
+}
+
+function startBackup() {
+  var btn = document.getElementById('btn-start-backup');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Memproses...';
+
+  // Tampilkan progress bar
+  var wrap = document.getElementById('backup-progress-wrap');
+  wrap.style.display = 'block';
+  _setProgress(0, 'Menginisialisasi...');
+
+  fetch('{% url "backup_source_code" %}', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'X-CSRFToken': getCookie('csrftoken') }
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.status) {
+      _backupError('Gagal memulai backup: ' + (data.error || 'Unknown error'));
+      return;
+    }
+    _pollProgress(data.backup_id);
+  })
+  .catch(err => _backupError('Network error: ' + err));
+}
+
+function _pollProgress(backupId) {
+  clearInterval(_backupPollTimer);
+  _backupPollTimer = setInterval(function () {
+    fetch('/backup/progress/' + backupId + '/', {
+      credentials: 'same-origin',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(r => r.json())
+    .then(data => {
+      _setProgress(data.progress || 0, data.message || '');
+      if (data.status === 'done') {
+        clearInterval(_backupPollTimer);
+        _setProgress(100, '✅ ' + (data.message || 'Backup selesai!'));
+        document.getElementById('backup-progress-bar').classList.remove('progress-bar-animated');
+        document.getElementById('backup-progress-bar').classList.add('bg-success');
+        _resetBackupBtn();
+        loadBackupList();
+        showNotif('success', 'Backup berhasil dibuat!');
+      } else if (data.status === 'error') {
+        clearInterval(_backupPollTimer);
+        _backupError(data.message);
+      }
+    })
+    .catch(() => {}); // silent — retry next tick
+  }, 800);
+}
+
+function _setProgress(pct, msg) {
+  document.getElementById('backup-progress-bar').style.width = pct + '%';
+  document.getElementById('backup-pct-label').textContent = pct + '%';
+  var log = document.getElementById('backup-log');
+  log.textContent = msg;
+  log.scrollTop = log.scrollHeight;
+}
+
+function _backupError(msg) {
+  _setProgress(0, '❌ ' + msg);
+  document.getElementById('backup-progress-bar').classList.add('bg-danger');
+  document.getElementById('backup-progress-bar').classList.remove('progress-bar-animated');
+  _resetBackupBtn();
+  showNotif('error', msg);
+}
+
+function _resetBackupBtn() {
+  var btn = document.getElementById('btn-start-backup');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="mdi mdi-play-circle me-1"></i> Buat Backup Sekarang';
+}
+
+/* ── Backup list ─────────────────────────────────── */
+function loadBackupList() {
+  var tbody = document.getElementById('backup-tbody');
+  tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">' +
+    '<span class="spinner-border spinner-border-sm me-2"></span>Memuat...</td></tr>';
+
+  fetch('{% url "backup_list" %}', { credentials: 'same-origin' })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.status || data.backups.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">' +
+        '<i class="mdi mdi-archive-off me-1"></i>Belum ada backup</td></tr>';
+      return;
+    }
+    var html = '';
+    data.backups.forEach(function(b) {
+      var dt = new Date(b.created * 1000);
+      var dtStr = dt.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' })
+                + ' ' + dt.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+      html += `
+        <tr class="backup-file-row align-middle">
+          <td>
+            <i class="mdi mdi-zip-box text-info me-1"></i>
+            <code style="font-size:12px;">${_escHtml(b.filename)}</code>
+          </td>
+          <td>
+            <span class="badge bg-soft-primary text-primary backup-size-badge">${_escHtml(b.size_human)}</span>
+          </td>
+          <td style="font-size:12px;white-space:nowrap;">${dtStr}</td>
+          <td class="text-end">
+            <a href="/backup/download/${encodeURIComponent(b.filename)}/"
+               class="btn btn-soft-success backup-action-btn waves-effect me-1"
+               title="Download" data-bs-toggle="tooltip">
+              <i class="mdi mdi-download"></i>
+            </a>
+            <button onclick="deleteBackup('${_escHtml(b.filename)}')"
+                    class="btn btn-soft-danger backup-action-btn waves-effect"
+                    title="Hapus" data-bs-toggle="tooltip">
+              <i class="mdi mdi-trash-can"></i>
+            </button>
+          </td>
+        </tr>`;
+    });
+    tbody.innerHTML = html;
+    // Re-init tooltips
+    [].forEach.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'), function(el) {
+      new bootstrap.Tooltip(el, { trigger: 'hover' });
+    });
+  })
+  .catch(() => {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">' +
+      '<i class="mdi mdi-alert me-1"></i>Gagal memuat daftar backup</td></tr>';
+  });
+}
+
+function deleteBackup(filename) {
+  Swal.fire({
+    title: 'Hapus backup?',
+    html: '<code style="font-size:12px;">' + _escHtml(filename) + '</code>',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ya, Hapus',
+    cancelButtonText: 'Batal',
+    confirmButtonColor: '#f1556c',
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    fetch('/backup/delete/' + encodeURIComponent(filename) + '/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status) {
+        showNotif('success', 'Backup berhasil dihapus');
+        loadBackupList();
+      } else {
+        showNotif('error', data.error || 'Gagal menghapus backup');
+      }
+    });
+  });
+}
+
+function showNotif(type, msg) {
+  if (typeof Snackbar !== 'undefined') {
+    Snackbar.show({
+      text: msg,
+      pos: 'bottom-right',
+      actionTextColor: type === 'success' ? '#28a745' : '#dc3545',
+      duration: 4000,
+    });
+  } else {
+    console.log('[Backup]', type, msg);
+  }
+}
+
+function _escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   USER MANAGEMENT FUNCTIONS (original)
+   ═══════════════════════════════════════════════════════════ */
+
+function delete_user(id, username) {
+  const delAPI = "./update?mode=delete&user=" + id;
+  swal.queue([{
+    title: 'Are you sure you want to delete user '+ username +'?',
+    text: "You won't be able to revert this!",
+    type: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Delete',
+    padding: '2em',
+    showLoaderOnConfirm: true,
+    preConfirm: function() {
+      return fetch(delAPI, {
+        method: 'POST',
+        credentials: "same-origin",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken")
+        }
+      })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function(data) {
+        return location.reload();
+      })
+      .catch(function() {
+        swal.insertQueueStep({
+          type: 'error',
+          title: 'Oops! Unable to delete the User!'
+        })
+      })
+    }
+  }])
+}
+
+function update_user_modal(user_id, permission, user_projects) {
+  var html_content = `
+  <div class="form mb-3">
+      <label for="user_role" class="form-label float-start">Role</label>
+      <select class="form-select" id="user_role">
+          <option ${permission == 'sys_admin' ? 'selected' : ''} value='sys_admin'>Sys Admin</option>
+          <option ${permission == 'penetration_tester' ? 'selected' : ''} value='penetration_tester'>Penetration Tester</option>
+          <option ${permission == 'auditor' ? 'selected' : ''} value='auditor'>Auditor</option>
+      </select>
+  </div>
+  <div class="form mb-3">
+      <label for="user_projects" class="form-label float-start">Projects</label>
+      ${permission === 'sys_admin' ?
+          `<p>This user has access to all projects.</p>` :
+          `<select class="form-select" id="user_projects" multiple>
+              {% for user_project in projects %}
+                  <option value="{{ user_project.id }}" {% if user_project.id in user_projects %}selected{% endif %}>{{ user_project.name }}</option>
+              {% endfor %}
+          </select>`
+      }
+  </div>
+  <div class="form mb-3">
+      <label for="password" class="form-label float-start">Change Password</label>
+      <div class="input-group input-group-merge">
+          <input type="password" id="password" class="form-control" placeholder="Password">
+      </div>
+      <div class="form-check form-switch float-end mt-2">
+          <input type="checkbox" class="form-check-input" id="show-password">
+          <label class="form-check-label text-small" for="show-password" style="font-size: 12px;">Show Password</label>
+      </div>
+  </div>
+  `;
+
+  Swal.fire({
+      title: 'Update User',
+      html: html_content,
+      showCloseButton: true,
+      showCancelButton: false,
+      confirmButtonText: 'Update',
+      showLoaderOnConfirm: true,
+      preConfirm: function () {
+          return new Promise(function (resolve) {
+              var role_selected = document.getElementById('user_role').value;
+              var change_password = document.getElementById('password').value;
+              var selected_projects = permission === 'sys_admin' ? [] : Array.from(document.getElementById('user_projects').selectedOptions).map(option => option.value);
+              const data = {
+                  'role': role_selected,
+                  'change_password': change_password,
+                  'projects': selected_projects
+              };
+              fetch('./update?mode=update&user=' + user_id, {
+                  method: 'POST',
+                  credentials: "same-origin",
+                  headers: {
+                      "X-CSRFToken": getCookie("csrftoken")
+                  },
+                  body: JSON.stringify(data)
+              })
+              .then(function (response) {
+                  return response.json();
+              })
+              .then(function(data) {
+                  return location.reload();
+              })
+              .catch(function() {
+                  swal.insertQueueStep({
+                      type: 'error',
+                      title: 'Oops! Unable to update user!'
+                  })
+              })
+              resolve()
+          })
+      }
+  });
+
+  if (permission !== 'sys_admin') {
+      user_projects.forEach(function(project_id) {
+          document.querySelector(`#user_projects option[value="${project_id}"]`).selected = true;
+      });
+  }
+
+  const passwordInput = document.getElementById('password');
+  const showPasswordCheckbox = document.getElementById('show-password');
+  showPasswordCheckbox.addEventListener('change', function() {
+      if (showPasswordCheckbox.checked) {
+          passwordInput.type = 'text';
+      } else {
+          passwordInput.type = 'password';
+      }
+  });
+}
+
+function create_user_modal() {
+  var html_content = `
+  <div class="form mb-3">
+      <label for="create_username" class="form-label float-start">Username</label>
+      <input type="text" id="create_username" class="form-control" placeholder="Username" required>
+  </div>
+  <div class="form mb-3">
+      <label for="create_user_role" class="form-label float-start">Role</label>
+      <select class="form-select" id="create_user_role">
+          <option value='sys_admin'>Sys Admin</option>
+          <option value='penetration_tester'>Penetration Tester</option>
+          <option value='auditor'>Auditor</option>
+      </select>
+  </div>
+  <div class="form mb-3" id="projects_container">
+      <label for="create_user_projects" class="form-label float-start">Projects</label>
+      <select class="form-select" id="create_user_projects" multiple>
+          {% for project in projects %}
+              <option value="{{ project.id }}">{{ project.name }}</option>
+          {% endfor %}
+      </select>
+  </div>
+  <div class="form mb-3">
+      <label for="create_password" class="form-label float-start">Create Password</label>
+      <div class="input-group input-group-merge">
+          <input type="password" id="create_password" class="form-control" placeholder="Password">
+      </div>
+      <div class="form-check form-switch float-end mt-2">
+          <input type="checkbox" class="form-check-input" id="show-password">
+          <label class="form-check-label text-small" for="show-password" style="font-size: 12px;">Show Password</label>
+      </div>
+  </div>
+  `;
+
+  Swal.fire({
+      title: 'Create User',
+      html: html_content,
+      showCloseButton: true,
+      showCancelButton: false,
+      confirmButtonText: 'Create User',
+      showLoaderOnConfirm: true,
+      preConfirm: function () {
+          return new Promise(function (resolve) {
+              var create_username = document.getElementById('create_username').value;
+              var role_selected = document.getElementById('create_user_role').value;
+              var create_password = document.getElementById('create_password').value;
+              var selected_projects = role_selected === 'sys_admin' ? [] : Array.from(document.getElementById('create_user_projects').selectedOptions).map(option => option.value);
+
+              if (!create_password) {
+                  Swal.fire({
+                      title: "Oops! Passwords can't be empty!",
+                      icon: 'error',
+                  });
+                  return;
+              }
+
+              const data = {
+                  'username': create_username,
+                  'role': role_selected,
+                  'password': create_password,
+                  'projects': selected_projects
+              };
+
+              fetch('./update?mode=create', {
+                  method: 'POST',
+                  credentials: "same-origin",
+                  headers: {
+                      "X-CSRFToken": getCookie("csrftoken")
+                  },
+                  body: JSON.stringify(data)
+              })
+              .then(function (response) {
+                  return response.json();
+              })
+              .then(function(data) {
+                  if (data.status) {
+                      return location.reload();
+                  } else {
+                      Swal.fire({
+                          title: "Oops! Can't create user!",
+                          icon: 'error',
+                          text: 'Error: ' + data.error,
+                      });
+                  }
+              })
+              .catch(function() {
+                  swal.insertQueueStep({
+                      type: 'error',
+                      title: 'Oops! Unable to create user!'
+                  });
+              });
+              resolve();
+          });
+      }
+  });
+
+  const passwordInput = document.getElementById('create_password');
+  const showPasswordCheckbox = document.getElementById('show-password');
+  showPasswordCheckbox.addEventListener('change', function() {
+      if (showPasswordCheckbox.checked) {
+          passwordInput.type = 'text';
+      } else {
+          passwordInput.type = 'password';
+      }
+  });
+
+  const roleSelect = document.getElementById('create_user_role');
+  roleSelect.addEventListener('change', function() {
+      var role = this.value;
+      var projectsContainer = document.getElementById('projects_container');
+      if (role === 'sys_admin') {
+          projectsContainer.innerHTML = '<p>This user has access to all projects.</p>';
+      } else {
+          projectsContainer.innerHTML = `
+          <label for="create_user_projects" class="form-label float-start">Projects</label>
+          <select class="form-select" id="create_user_projects" multiple>
+              {% for project in projects %}
+                  <option value="{{ project.id }}">{{ project.name }}</option>
+              {% endfor %}
+          </select>
+          `;
+      }
+  });
+
+  roleSelect.dispatchEvent(new Event('change'));
+}
+
+</script>
+{% endblock page_level_script %}
