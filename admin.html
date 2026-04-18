@@ -84,13 +84,12 @@ Admin Settings
     <div class="card">
       <div class="card-body py-2">
         <div class="d-flex flex-wrap gap-2 justify-content-end align-items-center">
+          <a href="{% url 'backup_page' %}" class="btn btn-soft-success waves-effect waves-light">
+            <i class="mdi mdi-google-drive me-1"></i> Backup Center
+          </a>
           <button type="button" class="btn btn-soft-info waves-effect waves-light"
                   onclick="openBackupSection()">
             <i class="mdi mdi-archive-arrow-down me-1"></i> Source Backup
-          </button>
-          <button type="button" class="btn btn-soft-success waves-effect waves-light"
-                  onclick="openGdriveSection()">
-            <i class="mdi mdi-google-drive me-1"></i> Google Drive
           </button>
           <button type="button" class="btn btn-primary waves-effect waves-light"
                   onclick="create_user_modal()">

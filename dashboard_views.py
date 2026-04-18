@@ -1148,3 +1148,388 @@ def gdrive_delete_remote(request, file_id):
         return JsonResponse({"status": True, "message": "File berhasil dihapus dari Google Drive"})
     except Exception as e:
         return JsonResponse({"status": False, "error": str(e)})
+
+
+# ==============================================================================
+# BACKUP PAGE  —  Halaman Backup Terpadu (DB + Source Code + Export)
+# ==============================================================================
+
+GDRIVE_DB_BACKUP_DIR = "/home/rengine/rengine/backups/db"
+GDRIVE_DB_FOLDER_KEY = "gdrive_db_folder_id"   # Redis key untuk folder ID DB backup
+GDRIVE_DB_FOLDER_DEFAULT = GDRIVE_FOLDER_ID_DEFAULT
+DB_BACKUP_MAX_LOCAL = 5   # simpan 5 file lokal saja
+
+DB_BACKUP_SCHEDULE_KEY = "gdrive_db_backup_schedule"   # e.g. "30" (minutes)
+DB_BACKUP_LAST_KEY     = "gdrive_db_last_backup_ts"
+DB_BACKUP_PROGRESS_KEY = "gdrive_db_backup_progress:{job_id}"
+
+
+def _gdrive_get_db_folder():
+    r = _get_redis()
+    if r:
+        v = r.get(GDRIVE_DB_FOLDER_KEY)
+        if v:
+            return v.decode()
+    return GDRIVE_DB_FOLDER_DEFAULT
+
+
+def _gdrive_set_db_folder(folder_id: str):
+    r = _get_redis()
+    if r:
+        r.set(GDRIVE_DB_FOLDER_KEY, folder_id)
+
+
+def _set_db_progress(job_id, data):
+    r = _get_redis()
+    key = DB_BACKUP_PROGRESS_KEY.format(job_id=job_id)
+    if r:
+        r.setex(key, 3600, json.dumps(data))
+    else:
+        with _backup_lock:
+            _backup_progress_mem[key] = data
+
+
+def _get_db_progress(job_id):
+    r = _get_redis()
+    key = DB_BACKUP_PROGRESS_KEY.format(job_id=job_id)
+    if r:
+        val = r.get(key)
+        if val:
+            return json.loads(val)
+    return _backup_progress_mem.get(key, {"status": "not_found", "progress": 0, "message": "Job tidak ditemukan"})
+
+
+def _do_db_backup_and_upload(job_id, folder_id):
+    """pg_dump → gzip → upload ke Google Drive."""
+    import subprocess, gzip, shutil
+
+    try:
+        os.makedirs(GDRIVE_DB_BACKUP_DIR, exist_ok=True)
+        _set_db_progress(job_id, {"status": "running", "progress": 10, "message": "Memulai pg_dump..."})
+
+        ts = django_now().strftime("%Y-%m-%d-%H-%M-%S")
+        raw_file   = os.path.join(GDRIVE_DB_BACKUP_DIR, f"db_backup_{ts}.sql")
+        gz_file    = raw_file + ".gz"
+        filename   = os.path.basename(gz_file)
+
+        # pg_dump
+        env = os.environ.copy()
+        env["PGPASSWORD"] = env.get("POSTGRES_PASSWORD", "")
+        cmd = [
+            "pg_dump",
+            "-h", env.get("POSTGRES_HOST", "db"),
+            "-p", env.get("POSTGRES_PORT", "5432"),
+            "-U", env.get("POSTGRES_USER", "rengine"),
+            "-d", env.get("POSTGRES_DB", "rengine"),
+            "-F", "p",   # plain SQL
+            "-f", raw_file,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env)
+        if result.returncode != 0:
+            raise RuntimeError(f"pg_dump error: {result.stderr[:300]}")
+
+        _set_db_progress(job_id, {"status": "running", "progress": 40, "message": "Mengompres file..."})
+
+        # Compress
+        with open(raw_file, "rb") as f_in:
+            with gzip.open(gz_file, "wb", compresslevel=6) as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        os.remove(raw_file)
+
+        file_size = os.path.getsize(gz_file)
+        _set_db_progress(job_id, {"status": "running", "progress": 55,
+                                   "message": f"Upload ke Drive ({_human_size(file_size)})..."})
+
+        # Upload ke Google Drive
+        web_link = ""
+        file_id_drive = ""
+        service = _gdrive_build_service()
+        if service and folder_id:
+            try:
+                from googleapiclient.http import MediaFileUpload
+                file_metadata = {"name": filename, "parents": [folder_id]}
+                media = MediaFileUpload(gz_file, mimetype="application/gzip", resumable=True, chunksize=4*1024*1024)
+                req = service.files().create(body=file_metadata, media_body=media, fields="id,webViewLink")
+                response = None
+                while response is None:
+                    status_up, response = req.next_chunk()
+                    if status_up:
+                        pct = int(status_up.progress() * 40) + 55
+                        _set_db_progress(job_id, {"status": "running", "progress": pct, "message": f"Mengupload... {pct}%"})
+                file_id_drive = response.get("id", "")
+                web_link = response.get("webViewLink", f"https://drive.google.com/file/d/{file_id_drive}/view")
+            except Exception as ue:
+                logger.warning(f"[DBBackup] drive upload failed: {ue}")
+
+        # Hapus file lokal lama
+        existing = sorted(
+            [f for f in os.listdir(GDRIVE_DB_BACKUP_DIR) if f.endswith(".sql.gz")],
+            key=lambda f: os.path.getmtime(os.path.join(GDRIVE_DB_BACKUP_DIR, f))
+        )
+        while len(existing) > DB_BACKUP_MAX_LOCAL:
+            try:
+                os.remove(os.path.join(GDRIVE_DB_BACKUP_DIR, existing.pop(0)))
+            except OSError:
+                pass
+
+        # Update last backup timestamp
+        r = _get_redis()
+        if r:
+            r.set(DB_BACKUP_LAST_KEY, str(time.time()))
+
+        _set_db_progress(job_id, {
+            "status": "done", "progress": 100,
+            "message": f"Backup selesai! {filename} ({_human_size(file_size)})",
+            "filename": filename,
+            "web_link": web_link,
+            "file_id": file_id_drive,
+            "size_human": _human_size(file_size),
+        })
+
+    except Exception as e:
+        logger.error(f"[DBBackup] error: {e}")
+        _set_db_progress(job_id, {"status": "error", "progress": 0, "message": f"Error: {str(e)}"})
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def backup_page(request):
+    """Halaman Backup Terpadu — DB + Source Code + Export Data."""
+    from startScan.models import Vulnerability, ScanHistory
+    connected = False
+    sa_email = ""
+    folder_id = _gdrive_get_db_folder()
+    folder_name = folder_id
+    gdrive_files = []
+
+    # Cek koneksi Drive
+    try:
+        service = _gdrive_build_service()
+        if service:
+            connected = True
+            sa = _gdrive_get_service_account_json()
+            if sa:
+                sa_email = sa.get("client_email", "")
+            try:
+                fi = service.files().get(fileId=folder_id, fields="id,name").execute()
+                folder_name = fi.get("name", folder_id)
+            except Exception:
+                pass
+            gdrive_files = _gdrive_list_db_backups(folder_id)
+    except Exception:
+        pass
+
+    # Stats lokal DB backup
+    local_db_backups = _list_local_db_backups()
+
+    # Last backup time
+    last_backup_ts = None
+    r = _get_redis()
+    if r:
+        v = r.get(DB_BACKUP_LAST_KEY)
+        if v:
+            last_backup_ts = float(v.decode())
+
+    # Schedule
+    schedule_minutes = _get_db_backup_schedule()
+
+    # Vulnerability counts untuk export
+    try:
+        vuln_total = Vulnerability.objects.count()
+        vuln_xss   = Vulnerability.objects.filter(name__icontains="xss").count()
+        scan_count = ScanHistory.objects.count()
+    except Exception:
+        vuln_total = vuln_xss = scan_count = 0
+
+    context = {
+        "connected": connected,
+        "sa_email": sa_email,
+        "folder_id": folder_id,
+        "folder_name": folder_name,
+        "gdrive_files": gdrive_files,
+        "gdrive_file_count": len(gdrive_files),
+        "local_db_backups": local_db_backups,
+        "last_backup_ts": last_backup_ts,
+        "schedule_minutes": schedule_minutes,
+        "vuln_total": vuln_total,
+        "vuln_xss": vuln_xss,
+        "scan_count": scan_count,
+    }
+    return render(request, "dashboard/backup.html", context)
+
+
+def _gdrive_list_db_backups(folder_id):
+    """Daftar file db_backup_* di Google Drive."""
+    try:
+        service = _gdrive_build_service()
+        if not service:
+            return []
+        result = service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false and name contains 'db_backup_'",
+            fields="files(id,name,size,createdTime,modifiedTime,webViewLink)",
+            orderBy="createdTime desc",
+            pageSize=50,
+        ).execute()
+        out = []
+        for f in result.get("files", []):
+            sz = int(f.get("size", 0))
+            out.append({
+                "id": f["id"],
+                "filename": f["name"],
+                "size": sz,
+                "size_human": _human_size(sz),
+                "created_time": f.get("createdTime", ""),
+                "web_link": f.get("webViewLink", f"https://drive.google.com/file/d/{f['id']}/view"),
+            })
+        return out
+    except Exception as e:
+        logger.error(f"[GDrive] list_db_backups: {e}")
+        return []
+
+
+def _list_local_db_backups():
+    os.makedirs(GDRIVE_DB_BACKUP_DIR, exist_ok=True)
+    out = []
+    for fname in os.listdir(GDRIVE_DB_BACKUP_DIR):
+        if fname.endswith(".sql.gz") and fname.startswith("db_backup_"):
+            fpath = os.path.join(GDRIVE_DB_BACKUP_DIR, fname)
+            stat = os.stat(fpath)
+            out.append({"filename": fname, "size_human": _human_size(stat.st_size), "created": stat.st_mtime})
+    out.sort(key=lambda x: x["created"], reverse=True)
+    return out
+
+
+def _get_db_backup_schedule():
+    """Baca jadwal backup dari Redis (dalam menit)."""
+    r = _get_redis()
+    if r:
+        v = r.get(DB_BACKUP_SCHEDULE_KEY)
+        if v:
+            return int(v.decode())
+    return 0  # 0 = manual only
+
+
+def _set_db_backup_schedule(minutes: int):
+    r = _get_redis()
+    if r:
+        if minutes > 0:
+            r.set(DB_BACKUP_SCHEDULE_KEY, str(minutes))
+        else:
+            r.delete(DB_BACKUP_SCHEDULE_KEY)
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def db_backup_now(request):
+    """Mulai DB backup + upload ke Drive secara async."""
+    if request.method != "POST":
+        return JsonResponse({"status": False, "error": "Method not allowed"}, status=405)
+
+    body = {}
+    if request.content_type and "application/json" in request.content_type:
+        try:
+            body = json.loads(request.body)
+        except Exception:
+            pass
+
+    folder_id = body.get("folder_id", _gdrive_get_db_folder())
+    job_id = f"dbbackup_{int(time.time())}"
+    _set_db_progress(job_id, {"status": "starting", "progress": 0, "message": "Menginisialisasi backup DB..."})
+
+    t = threading.Thread(target=_do_db_backup_and_upload, args=(job_id, folder_id), daemon=True)
+    t.start()
+
+    return JsonResponse({"status": True, "job_id": job_id})
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def db_backup_progress(request, job_id):
+    data = _get_db_progress(job_id)
+    return JsonResponse(data)
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def db_backup_gdrive_list(request):
+    """Daftar file DB backup di Google Drive (AJAX)."""
+    folder_id = request.GET.get("folder_id", _gdrive_get_db_folder())
+    files = _gdrive_list_db_backups(folder_id)
+    return JsonResponse({"status": True, "files": files, "count": len(files)})
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def db_backup_settings(request):
+    """Simpan folder ID dan jadwal backup."""
+    if request.method != "POST":
+        return JsonResponse({"status": False, "error": "Method not allowed"}, status=405)
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return JsonResponse({"status": False, "error": "Invalid JSON"})
+
+    folder_id = body.get("folder_id", "").strip()
+    schedule  = int(body.get("schedule_minutes", 0))
+
+    if folder_id:
+        _gdrive_set_db_folder(folder_id)
+    if schedule >= 0:
+        _set_db_backup_schedule(schedule)
+
+    return JsonResponse({"status": True, "message": "Pengaturan disimpan", "folder_id": folder_id or _gdrive_get_db_folder(), "schedule": schedule})
+
+
+@has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def export_vulnerability_data(request):
+    """Export data Vulnerability sebagai JSON atau CSV."""
+    import csv
+    from django.http import HttpResponse
+    from startScan.models import Vulnerability
+
+    fmt       = request.GET.get("format", "json")   # json | csv
+    data_type = request.GET.get("type", "all")       # all | xss | subdomain
+
+    qs = Vulnerability.objects.select_related("subdomain", "target_domain").all()
+    if data_type == "xss":
+        qs = qs.filter(name__icontains="xss")
+    elif data_type == "subdomain":
+        qs = qs.filter(subdomain__isnull=False)
+
+    if fmt == "csv":
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="rengine_vulnerabilities_{data_type}.csv"'
+        writer = csv.writer(response)
+        writer.writerow(["id", "name", "severity", "type", "http_url", "subdomain", "target_domain",
+                         "description", "cvss_score", "discovered_date", "open_status"])
+        SEV_MAP = {0: "info", 1: "low", 2: "medium", 3: "high", 4: "critical", 5: "unknown"}
+        for v in qs.iterator(chunk_size=500):
+            writer.writerow([
+                v.id, v.name, SEV_MAP.get(v.severity, str(v.severity)),
+                v.type or "", v.http_url or "",
+                str(v.subdomain) if v.subdomain else "",
+                str(v.target_domain) if v.target_domain else "",
+                (v.description or "")[:500],
+                v.cvss_score or "",
+                str(v.discovered_date) if v.discovered_date else "",
+                v.open_status,
+            ])
+        return response
+    else:
+        SEV_MAP = {0: "info", 1: "low", 2: "medium", 3: "high", 4: "critical", 5: "unknown"}
+        data = []
+        for v in qs.iterator(chunk_size=500):
+            data.append({
+                "id": v.id, "name": v.name,
+                "severity": SEV_MAP.get(v.severity, str(v.severity)),
+                "type": v.type or "",
+                "http_url": v.http_url or "",
+                "subdomain": str(v.subdomain) if v.subdomain else "",
+                "target_domain": str(v.target_domain) if v.target_domain else "",
+                "description": (v.description or "")[:500],
+                "cvss_score": v.cvss_score,
+                "discovered_date": str(v.discovered_date) if v.discovered_date else "",
+                "open_status": v.open_status,
+                "curl_command": v.curl_command or "",
+            })
+        response = HttpResponse(
+            json.dumps({"total": len(data), "vulnerabilities": data}, ensure_ascii=False, indent=2),
+            content_type="application/json",
+        )
+        response["Content-Disposition"] = f'attachment; filename="rengine_vulnerabilities_{data_type}.json"'
+        return response

@@ -23,6 +23,13 @@ urlpatterns = [
     path("backup/download/<str:filename>/", views.backup_download, name="backup_download"),
     path("backup/delete/<str:filename>/", views.backup_delete, name="backup_delete"),
     path("backup/list/", views.backup_list, name="backup_list"),
+    # ── Backup Page Terpadu ────────────────────────────────────
+    path("backup-center/", views.backup_page, name="backup_page"),
+    path("backup-center/db/now/", views.db_backup_now, name="db_backup_now"),
+    path("backup-center/db/progress/<str:job_id>/", views.db_backup_progress, name="db_backup_progress"),
+    path("backup-center/db/gdrive-list/", views.db_backup_gdrive_list, name="db_backup_gdrive_list"),
+    path("backup-center/db/settings/", views.db_backup_settings, name="db_backup_settings"),
+    path("backup-center/export/", views.export_vulnerability_data, name="export_vulnerability_data"),
     # Google Drive Backup
     path("gdrive/status/", views.gdrive_status, name="gdrive_status"),
     path("gdrive/upload/", views.gdrive_upload_backup, name="gdrive_upload_backup"),

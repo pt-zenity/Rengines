@@ -1,0 +1,1045 @@
+{% extends 'base/base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Backup Center{% endblock %}
+
+{% block custom_js_css_link %}
+<style>
+/* ═══════════════════════════ BACKUP CENTER — DARK THEME ═══════════════════════════ */
+#backup-center-root {
+  background: #0b1120;
+  min-height: 100vh;
+  padding: 24px 0 48px;
+  color: #e2e8f0;
+}
+.bc-card {
+  background: #141c2e;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 16px;
+  padding: 0;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.bc-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.bc-card-body { padding: 20px; }
+
+/* ── Drive file list ── */
+.drive-file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  transition: background .15s;
+  cursor: pointer;
+}
+.drive-file-item:last-child { border-bottom: none; }
+.drive-file-item:hover { background: rgba(99,179,237,.06); }
+.drive-file-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: rgba(66,153,225,.18);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px; color: #63b3ed;
+}
+.drive-file-name { font-size: 13px; font-weight: 500; color: #e2e8f0; }
+.drive-file-meta { font-size: 11px; color: #718096; margin-top: 1px; }
+.drive-file-action {
+  margin-left: auto;
+  color: #718096; font-size: 16px;
+  text-decoration: none; padding: 4px 6px; border-radius: 6px;
+  transition: all .15s;
+}
+.drive-file-action:hover { background: rgba(99,179,237,.15); color: #63b3ed; }
+
+/* ── Header buttons ── */
+.bc-btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff; border: none; border-radius: 10px;
+  padding: 8px 18px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: all .2s; box-shadow: 0 4px 15px rgba(59,130,246,.3);
+}
+.bc-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,.4); }
+.bc-btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+.bc-btn-ghost {
+  background: rgba(255,255,255,.06);
+  color: #a0aec0; border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px; padding: 7px 14px; font-size: 12px;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  transition: all .2s;
+}
+.bc-btn-ghost:hover { background: rgba(255,255,255,.1); color: #e2e8f0; }
+
+.bc-btn-success {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff; border: none; border-radius: 10px;
+  padding: 8px 18px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: all .2s; box-shadow: 0 4px 15px rgba(34,197,94,.25);
+}
+.bc-btn-success:hover { transform: translateY(-1px); }
+
+.bc-btn-orange {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: #fff; border: none; border-radius: 10px;
+  padding: 10px 22px; font-size: 14px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+  transition: all .2s; box-shadow: 0 4px 15px rgba(249,115,22,.3);
+  width: 100%;
+}
+.bc-btn-orange:hover { transform: translateY(-1px); }
+
+.bc-btn-green-lg {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff; border: none; border-radius: 10px;
+  padding: 10px 22px; font-size: 14px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+  transition: all .2s; box-shadow: 0 4px 15px rgba(34,197,94,.3);
+  width: 100%;
+}
+.bc-btn-green-lg:hover { transform: translateY(-1px); }
+
+/* ── Badge ── */
+.bc-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; border-radius: 20px;
+  padding: 2px 10px;
+}
+.bc-badge-connected { background: rgba(34,197,94,.15); color: #22c55e; }
+.bc-badge-disconnected { background: rgba(239,68,68,.15); color: #ef4444; }
+.bc-badge-info { background: rgba(59,130,246,.15); color: #60a5fa; }
+.bc-badge-warning { background: rgba(234,179,8,.15); color: #facc15; }
+.bc-badge-purple { background: rgba(168,85,247,.15); color: #c084fc; }
+
+/* ── Stats cards ── */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+@media(max-width:640px){ .stat-grid { grid-template-columns: repeat(2,1fr); } }
+.stat-card {
+  background: rgba(255,255,255,.04); border-radius: 12px;
+  padding: 14px 16px; text-align: center;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.stat-val { font-size: 22px; font-weight: 700; color: #e2e8f0; }
+.stat-lbl { font-size: 10px; font-weight: 600; letter-spacing: .05em; color: #718096; text-transform: uppercase; margin-top: 3px; }
+
+/* ── Progress bar ── */
+.bc-progress-wrap { display: none; }
+.bc-progress-bar-track {
+  background: rgba(255,255,255,.08); border-radius: 8px; height: 8px; overflow: hidden;
+}
+.bc-progress-bar-fill {
+  height: 100%; background: linear-gradient(90deg, #3b82f6, #06b6d4);
+  border-radius: 8px; width: 0%; transition: width .4s ease;
+}
+.bc-log {
+  background: #0d1a30; color: #7dd3fc; font-family: monospace;
+  font-size: 12px; border-radius: 8px; padding: 10px 14px;
+  min-height: 40px; border: 1px solid rgba(99,179,237,.15);
+  margin-top: 10px;
+}
+
+/* ── Panduan cards ── */
+.guide-item {
+  display: flex; gap: 14px; padding: 14px 16px;
+  border-radius: 12px; background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06); margin-bottom: 10px;
+}
+.guide-num {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+}
+.guide-title { font-size: 14px; font-weight: 600; color: #e2e8f0; margin-bottom: 4px; }
+.guide-desc { font-size: 12px; color: #718096; line-height: 1.5; }
+
+/* ── Include/exclude banner ── */
+.include-banner {
+  background: rgba(34,197,94,.06); border: 1px solid rgba(34,197,94,.15);
+  border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #86efac;
+  margin-bottom: 16px; line-height: 1.7;
+}
+code.tag {
+  background: rgba(34,197,94,.12); color: #86efac;
+  border-radius: 4px; padding: 1px 5px; font-size: 11px;
+}
+
+/* ── Export options ── */
+.option-pill {
+  padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
+  cursor: pointer; border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04); color: #a0aec0;
+  transition: all .15s;
+}
+.option-pill.active {
+  background: rgba(59,130,246,.2); border-color: #3b82f6; color: #93c5fd;
+}
+.option-pill:hover { background: rgba(255,255,255,.08); }
+.option-group-label { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: #4a5568; text-transform: uppercase; margin-bottom: 8px; }
+
+/* ── Schedule input ── */
+.bc-input {
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px; color: #e2e8f0; padding: 7px 12px; font-size: 13px;
+  width: 100%; outline: none;
+}
+.bc-input:focus { border-color: #3b82f6; }
+.bc-select {
+  background: #1a2540; border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px; color: #e2e8f0; padding: 7px 12px; font-size: 13px;
+  outline: none; cursor: pointer;
+}
+
+/* Divider text */
+.or-divider {
+  text-align: center; font-size: 11px; font-weight: 700;
+  color: #4a5568; letter-spacing: .1em; padding: 8px 0;
+}
+
+/* ── Connected panel ── */
+.cred-panel {
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
+  border-radius: 12px; padding: 16px;
+}
+textarea.bc-textarea {
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px; color: #7dd3fc; font-family: monospace; font-size: 11px;
+  width: 100%; min-height: 90px; padding: 10px 12px; outline: none; resize: vertical;
+}
+textarea.bc-textarea:focus { border-color: #3b82f6; }
+</style>
+{% endblock %}
+
+{% block page_title %}Backup Center{% endblock %}
+
+{% block breadcrumb_title %}
+<li class="breadcrumb-item"><a href="{% url 'dashboardIndex' current_project.slug %}">Dashboard</a></li>
+<li class="breadcrumb-item active">Backup Center</li>
+{% endblock %}
+
+{% block main_content %}
+<div id="backup-center-root">
+<div class="container-fluid px-3">
+
+{# ═══════════════════════════════════════════════════════════════════
+   TOP — Google Drive DB Backup (matches reference design exactly)
+═══════════════════════════════════════════════════════════════════ #}
+<div class="bc-card">
+  <div class="bc-card-header">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <span class="bc-badge bc-badge-info" style="font-size:12px;">
+        <i class="mdi mdi-google-drive"></i> Google Drive
+      </span>
+      <span id="conn-badge"
+        class="bc-badge {% if connected %}bc-badge-connected{% else %}bc-badge-disconnected{% endif %}">
+        <i class="mdi mdi-{% if connected %}check-circle{% else %}close-circle{% endif %}-outline"></i>
+        {% if connected %}Terhubung{% if sa_email %} · <small>{{ sa_email|truncatechars:28 }}</small>{% endif %}
+        {% else %}Belum Terhubung{% endif %}
+      </span>
+      <span class="text-muted" style="font-size:12px;">
+        Backup otomatis database PostgreSQL ke Shared Drive
+        "<strong id="folder-name-display">{{ folder_name }}</strong>" setiap
+        <span id="schedule-display">{% if schedule_minutes > 0 %}{{ schedule_minutes }} menit{% else %}manual{% endif %}</span>
+      </span>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="bc-btn-primary" id="btn-db-backup" onclick="startDbBackup()">
+        <i class="mdi mdi-database-export"></i> Backup DB Sekarang
+      </button>
+      <button class="bc-btn-ghost" onclick="refreshDriveList()">
+        <i class="mdi mdi-refresh"></i> Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- DB Backup Progress -->
+  <div id="db-progress-wrap" class="bc-progress-wrap" style="padding:16px 20px 0;">
+    <div class="d-flex justify-content-between mb-1">
+      <small style="color:#a0aec0;">Progress DB Backup</small>
+      <small id="db-pct-lbl" style="color:#a0aec0;">0%</small>
+    </div>
+    <div class="bc-progress-bar-track">
+      <div class="bc-progress-bar-fill" id="db-progress-bar"></div>
+    </div>
+    <div class="bc-log" id="db-log">Menginisialisasi...</div>
+  </div>
+
+  <!-- File List Header -->
+  <div style="padding: 14px 20px 6px; display:flex; align-items:center; gap:10px;">
+    <span style="font-size:11px; font-weight:700; letter-spacing:.08em; color:#4a5568; text-transform:uppercase;">
+      FILE DI DRIVE
+    </span>
+    <span class="bc-badge bc-badge-info" id="file-count-badge">{{ gdrive_file_count }} file</span>
+  </div>
+
+  <!-- Drive Files -->
+  <div id="drive-file-list">
+    {% if gdrive_files %}
+      {% for f in gdrive_files %}
+      <div class="drive-file-item">
+        <div class="drive-file-icon"><i class="mdi mdi-database"></i></div>
+        <div class="flex-grow-1">
+          <div class="drive-file-name">{{ f.filename }}</div>
+          <div class="drive-file-meta">{{ f.size_human }} &middot; {{ f.created_time|default:"-" }}</div>
+        </div>
+        <a href="{{ f.web_link }}" target="_blank" class="drive-file-action" title="Buka di Drive">
+          <i class="mdi mdi-open-in-new"></i>
+        </a>
+        <button onclick="deleteDriveFile('{{ f.id }}','{{ f.filename }}')"
+          class="drive-file-action" style="border:none;background:none;" title="Hapus">
+          <i class="mdi mdi-trash-can" style="color:#fc8181;"></i>
+        </button>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="padding:28px; text-align:center; color:#4a5568; font-size:13px;">
+        {% if connected %}
+          <i class="mdi mdi-cloud-off-outline" style="font-size:28px; display:block; margin-bottom:8px;"></i>
+          Belum ada backup database di Google Drive
+        {% else %}
+          <i class="mdi mdi-google-drive" style="font-size:28px; display:block; margin-bottom:8px; color:#3b82f6;"></i>
+          Hubungkan Google Drive untuk melihat file backup
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div><!-- /bc-card drive list -->
+
+
+{# ════════════════════════════════════════════
+   ROW: Panduan Backup (kiri) + Settings (kanan)
+════════════════════════════════════════════ #}
+<div class="row g-3 mb-0">
+  <div class="col-lg-7">
+    <div class="bc-card" style="height:100%;">
+      <div class="bc-card-header">
+        <div class="d-flex align-items-center gap-2">
+          <i class="mdi mdi-book-open-variant" style="color:#f59e0b; font-size:18px;"></i>
+          <span style="font-size:15px; font-weight:600;">Panduan Backup</span>
+        </div>
+        <span style="font-size:12px; color:#718096;">Cara menggunakan fitur backup dan export secara optimal.</span>
+      </div>
+      <div class="bc-card-body" style="padding-top:14px;">
+        <div class="guide-item">
+          <div class="guide-num" style="background:rgba(99,102,241,.2); color:#818cf8;">1</div>
+          <div>
+            <div class="guide-title">Source Code Lengkap</div>
+            <div class="guide-desc">Download snapshot penuh aplikasi sebagai <code class="tag">.tar.gz</code> — termasuk <code class="tag">credentials/</code>, <code class="tag">.env</code>, binary. Hanya <code class="tag">.git/</code> yang dikecualikan.</div>
+          </div>
+        </div>
+        <div class="guide-item">
+          <div class="guide-num" style="background:rgba(34,197,94,.2); color:#4ade80;">2</div>
+          <div>
+            <div class="guide-title">Export JSON / CSV</div>
+            <div class="guide-desc">Download semua data Vulnerability dari selected scans. JSON untuk backup lengkap, CSV untuk spreadsheet.</div>
+          </div>
+        </div>
+        <div class="guide-item">
+          <div class="guide-num" style="background:rgba(59,130,246,.2); color:#60a5fa;">3</div>
+          <div>
+            <div class="guide-title">Google Drive Backup</div>
+            <div class="guide-desc">Backup otomatis PostgreSQL ke Shared Drive setiap interval yang ditentukan. Set Service Account JSON lalu atur jadwal di panel Settings.</div>
+          </div>
+        </div>
+        <div class="guide-item" style="margin-bottom:0;">
+          <div class="guide-num" style="background:rgba(239,68,68,.2); color:#f87171;">4</div>
+          <div>
+            <div class="guide-title">Credentials Aman</div>
+            <div class="guide-desc">Service Account JSON disimpan terenkripsi di Redis, tidak ditulis ke disk. Backup source code menyertakan semua file penting, dikecualikan hanya <code class="tag">.git/</code>.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="bc-card" style="height:100%;">
+      <div class="bc-card-header">
+        <div class="d-flex align-items-center gap-2">
+          <i class="mdi mdi-cog" style="color:#94a3b8; font-size:18px;"></i>
+          <span style="font-size:15px; font-weight:600;">Pengaturan Drive</span>
+        </div>
+      </div>
+      <div class="bc-card-body">
+        <!-- Credentials setup -->
+        <div class="cred-panel mb-3">
+          <div style="font-size:12px; font-weight:600; color:#94a3b8; margin-bottom:8px;">
+            <i class="mdi mdi-key-variant me-1"></i> Service Account JSON
+          </div>
+          {% if connected %}
+          <div style="font-size:12px; color:#4ade80; margin-bottom:10px;">
+            <i class="mdi mdi-check-circle me-1"></i>
+            Terhubung: <code style="color:#86efac;">{{ sa_email }}</code>
+          </div>
+          <button class="bc-btn-ghost" style="font-size:11px; padding:5px 12px;" onclick="disconnectGdrive()">
+            <i class="mdi mdi-link-off"></i> Putus Koneksi
+          </button>
+          {% else %}
+          <textarea class="bc-textarea" id="sa-json-input"
+            placeholder='{"type":"service_account","project_id":"...","private_key":"-----BEGIN RSA PRIVATE KEY-----\n...","client_email":"...@....iam.gserviceaccount.com",...}'></textarea>
+          <div class="d-flex gap-2 mt-2">
+            <button class="bc-btn-success" style="font-size:12px; padding:6px 14px;" onclick="saveGdriveCreds()">
+              <i class="mdi mdi-content-save"></i> Simpan
+            </button>
+            <button class="bc-btn-ghost" style="font-size:12px; padding:5px 12px;" onclick="document.getElementById('sa-file-input').click()">
+              <i class="mdi mdi-file-upload"></i> Upload JSON
+            </button>
+            <input type="file" id="sa-file-input" accept=".json" style="display:none" onchange="loadJsonFile(this)">
+          </div>
+          <div id="cred-msg" style="font-size:12px; margin-top:6px;"></div>
+          {% endif %}
+        </div>
+
+        <!-- Folder ID -->
+        <div class="mb-3">
+          <label style="font-size:11px; font-weight:600; color:#718096; text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:5px;">
+            <i class="mdi mdi-folder-google-drive me-1"></i> Folder ID Google Drive
+          </label>
+          <input class="bc-input" id="folder-id-input" value="{{ folder_id }}"
+            placeholder="0AMzZ2vjfVdc1Uk9PVA">
+        </div>
+
+        <!-- Schedule -->
+        <div class="mb-3">
+          <label style="font-size:11px; font-weight:600; color:#718096; text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:5px;">
+            <i class="mdi mdi-clock-outline me-1"></i> Jadwal Otomatis
+          </label>
+          <select class="bc-select w-100" id="schedule-select">
+            <option value="0" {% if schedule_minutes == 0 %}selected{% endif %}>Manual saja</option>
+            <option value="30" {% if schedule_minutes == 30 %}selected{% endif %}>Setiap 30 menit</option>
+            <option value="60" {% if schedule_minutes == 60 %}selected{% endif %}>Setiap 1 jam</option>
+            <option value="360" {% if schedule_minutes == 360 %}selected{% endif %}>Setiap 6 jam</option>
+            <option value="720" {% if schedule_minutes == 720 %}selected{% endif %}>Setiap 12 jam</option>
+            <option value="1440" {% if schedule_minutes == 1440 %}selected{% endif %}>Setiap 24 jam</option>
+          </select>
+        </div>
+
+        <button class="bc-btn-success" style="width:100%; justify-content:center;" onclick="saveSettings()">
+          <i class="mdi mdi-content-save"></i> Simpan Pengaturan
+        </button>
+        <div id="settings-msg" style="font-size:12px; margin-top:8px; text-align:center;"></div>
+      </div>
+    </div>
+  </div>
+</div><!-- /row -->
+
+
+{# ══════════════════════════════════════════════
+   Backup Source Code (lengkap, sesuai referensi)
+══════════════════════════════════════════════ #}
+<div class="bc-card">
+  <div class="bc-card-header">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <div class="d-flex align-items-center gap-2">
+        <i class="mdi mdi-code-braces" style="color:#a78bfa; font-size:20px;"></i>
+        <span style="font-size:15px; font-weight:600;">Backup Source Code</span>
+        <span class="bc-badge bc-badge-purple">LENGKAP</span>
+      </div>
+    </div>
+    <button class="bc-btn-ghost" onclick="checkSourceStats()">
+      <i class="mdi mdi-refresh"></i> Refresh Stats
+    </button>
+  </div>
+  <div class="bc-card-body">
+    <!-- Description -->
+    <p style="font-size:13px; color:#718096; margin-bottom:12px;">
+      Arsip seluruh aplikasi <code class="tag">/home/rengine/rengine</code> &mdash;
+      termasuk <code class="tag">node_modules/</code> <code class="tag">credentials/</code>
+      <code class="tag">.env</code> <code class="tag">postgres-db-data/</code>
+      <code class="tag">*.gz</code> <code class="tag">*.png</code> <code class="tag">*.jpg</code>
+      <code class="tag">payload-fire-images/</code>.
+      Dikecualikan hanya <code class="tag">.git/</code>
+    </p>
+
+    <!-- Stats -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-val" id="stat-files">—</div>
+        <div class="stat-lbl">Total File</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="stat-raw">—</div>
+        <div class="stat-lbl">Ukuran Raw</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="stat-compressed">—</div>
+        <div class="stat-lbl">Est. Terkompresi</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:#f87171; font-size:14px;">.git/</div>
+        <div class="stat-lbl">Dikecualikan</div>
+      </div>
+    </div>
+
+    <!-- Include banner -->
+    <div class="include-banner">
+      <i class="mdi mdi-check-circle me-1" style="color:#4ade80;"></i>
+      <strong>Semua file disertakan:</strong>
+      node_modules/, credentials/, .env, postgres-db-data/, *.gz, *.png, *.jpg, payload-fire-images/
+      — snapshot lengkap dari aplikasi yang berjalan.
+      <span style="color:#f87171;"><strong>Dikecualikan:</strong> .git/</span>
+    </div>
+
+    <!-- Progress (source code) -->
+    <div class="bc-progress-wrap" id="src-progress-wrap" style="margin-bottom:16px;">
+      <div class="d-flex justify-content-between mb-1">
+        <small style="color:#a0aec0;">Progress</small>
+        <small id="src-pct-lbl" style="color:#a0aec0;">0%</small>
+      </div>
+      <div class="bc-progress-bar-track">
+        <div class="bc-progress-bar-fill" id="src-progress-bar" style="background:linear-gradient(90deg,#a78bfa,#7c3aed);"></div>
+      </div>
+      <div class="bc-log" id="src-log">Menginisialisasi...</div>
+    </div>
+
+    <!-- Two columns: Download Local / Upload to Drive -->
+    <div class="row g-3">
+      <div class="col-md-5">
+        <div class="cred-panel text-center">
+          <i class="mdi mdi-download" style="font-size:28px; color:#f97316; display:block; margin-bottom:8px;"></i>
+          <div style="font-size:14px; font-weight:600; margin-bottom:4px;">Download Lokal</div>
+          <div style="font-size:12px; color:#718096; margin-bottom:14px;">
+            Unduh arsip <code class="tag">.tar.gz</code> langsung ke browser Anda.
+          </div>
+          <button class="bc-btn-orange" id="btn-src-download" onclick="startSourceBackup('download')">
+            <i class="mdi mdi-download"></i> Download .tar.gz
+          </button>
+        </div>
+      </div>
+      <div class="col-md-2 d-flex align-items-center">
+        <div class="or-divider w-100">ATAU</div>
+      </div>
+      <div class="col-md-5">
+        <div class="cred-panel text-center">
+          <i class="mdi mdi-google-drive" style="font-size:28px; color:#22c55e; display:block; margin-bottom:8px;"></i>
+          <div style="font-size:14px; font-weight:600; margin-bottom:4px;">Upload ke Google Drive</div>
+          <div style="font-size:12px; color:#718096; margin-bottom:14px;">
+            Buat arsip lalu upload ke Shared Drive "<span id="folder-name-src">{{ folder_name }}</span>".
+          </div>
+          <button class="bc-btn-green-lg" id="btn-src-upload" onclick="startSourceBackup('drive')">
+            <i class="mdi mdi-cloud-upload"></i> Upload ke Drive
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Local backup list -->
+    <div style="margin-top:20px;">
+      <div style="font-size:11px; font-weight:700; letter-spacing:.08em; color:#4a5568; text-transform:uppercase; margin-bottom:10px;">
+        BACKUP LOKAL TERSIMPAN
+      </div>
+      <div id="local-backup-list">
+        {% if local_db_backups %}
+          {% for b in local_db_backups %}
+          <div class="drive-file-item">
+            <div class="drive-file-icon" style="background:rgba(167,139,250,.15); color:#a78bfa;">
+              <i class="mdi mdi-zip-box"></i>
+            </div>
+            <div class="flex-grow-1">
+              <div class="drive-file-name">{{ b.filename }}</div>
+              <div class="drive-file-meta">{{ b.size_human }}</div>
+            </div>
+            <a href="{% url 'backup_download' b.filename %}"
+              class="drive-file-action" title="Download">
+              <i class="mdi mdi-download"></i>
+            </a>
+          </div>
+          {% endfor %}
+        {% else %}
+        <div style="text-align:center; color:#4a5568; font-size:13px; padding:16px 0;">
+          <i class="mdi mdi-archive-off" style="font-size:24px; display:block; margin-bottom:6px;"></i>
+          Belum ada backup source code lokal
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div><!-- /source code card -->
+
+
+{# ══════════════════════════════════════════════
+   Export Data Vulnerability
+══════════════════════════════════════════════ #}
+<div class="bc-card">
+  <div class="bc-card-header">
+    <div class="d-flex align-items-center gap-2">
+      <i class="mdi mdi-bug-check" style="color:#f87171; font-size:20px;"></i>
+      <span style="font-size:15px; font-weight:600;">Export Data Vulnerability</span>
+      <span class="bc-badge bc-badge-warning">{{ vuln_total|default:"0" }} total</span>
+    </div>
+  </div>
+  <div class="bc-card-body">
+    <p style="font-size:13px; color:#718096; margin-bottom:16px;">
+      Download data vulnerability dari semua scan dalam format JSON atau CSV.
+    </p>
+
+    <div class="row g-4">
+      <!-- Tipe Data -->
+      <div class="col-md-4">
+        <div class="option-group-label">Tipe Data</div>
+        <div class="d-flex flex-column gap-2">
+          <button class="option-pill active" id="type-all" onclick="setExportType('all')">
+            <i class="mdi mdi-database me-1"></i> Semua Data
+            <span class="bc-badge bc-badge-info ms-1" style="font-size:10px;">{{ vuln_total }}</span>
+          </button>
+          <button class="option-pill" id="type-xss" onclick="setExportType('xss')">
+            <i class="mdi mdi-code-tags me-1"></i> XSS Findings
+            <span class="bc-badge bc-badge-warning ms-1" style="font-size:10px;">{{ vuln_xss }}</span>
+          </button>
+          <button class="option-pill" id="type-subdomain" onclick="setExportType('subdomain')">
+            <i class="mdi mdi-web me-1"></i> Per Subdomain
+          </button>
+        </div>
+      </div>
+
+      <!-- Format -->
+      <div class="col-md-4">
+        <div class="option-group-label">Format</div>
+        <div class="d-flex flex-column gap-2">
+          <button class="option-pill active" id="fmt-json" onclick="setExportFmt('json')">
+            <i class="mdi mdi-code-json me-1"></i> JSON
+          </button>
+          <button class="option-pill" id="fmt-csv" onclick="setExportFmt('csv')">
+            <i class="mdi mdi-table me-1"></i> CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- Download -->
+      <div class="col-md-4 d-flex flex-column justify-content-between">
+        <div class="option-group-label">Unduh</div>
+        <button class="bc-btn-green-lg mt-auto" id="btn-export" onclick="doExport()">
+          <i class="mdi mdi-download"></i>
+          <span id="export-btn-label">Download JSON</span>
+        </button>
+        <div style="font-size:11px; color:#4a5568; margin-top:10px; line-height:1.6;">
+          <span id="fmt-hint-json"><i class="mdi mdi-information-outline me-1"></i>JSON — semua field, cocok untuk import ulang atau analisis mendalam.</span>
+          <span id="fmt-hint-csv" style="display:none;"><i class="mdi mdi-information-outline me-1"></i>CSV — format tabel, ideal untuk Excel/Google Sheets.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /export card -->
+
+</div><!-- /container -->
+</div><!-- /backup-center-root -->
+{% endblock %}
+
+
+{% block page_level_script %}
+<script>
+/* ═══════════════════════════════════════════════
+   BACKUP CENTER — JAVASCRIPT
+═══════════════════════════════════════════════ */
+
+var _dbPollTimer   = null;
+var _srcPollTimer  = null;
+var _exportType    = 'all';
+var _exportFmt     = 'json';
+
+/* ── Utilities ───────────────────────────── */
+function getCsrf() { return getCookie('csrftoken'); }
+function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function bcNotif(type, msg) {
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({ icon: type === 'success' ? 'success' : 'error', title: msg, toast: true,
+      position: 'top-end', showConfirmButton: false, timer: 3500, timerProgressBar: true });
+  } else { alert(msg); }
+}
+
+/* ── DB Backup ───────────────────────────── */
+function startDbBackup() {
+  var btn = document.getElementById('btn-db-backup');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Memproses...';
+  var wrap = document.getElementById('db-progress-wrap');
+  wrap.style.display = 'block';
+  setDbProgress(0, 'Menginisialisasi...');
+
+  var folderId = document.getElementById('folder-id-input').value.trim() || '{{ folder_id }}';
+
+  fetch('{% url "db_backup_now" %}', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder_id: folderId }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.status) { dbBackupError(data.error || 'Gagal memulai'); return; }
+    pollDbBackup(data.job_id);
+  })
+  .catch(e => dbBackupError('Network error: ' + e));
+}
+
+function pollDbBackup(jobId) {
+  clearInterval(_dbPollTimer);
+  _dbPollTimer = setInterval(function() {
+    fetch('/backup-center/db/progress/' + jobId + '/', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+      setDbProgress(data.progress || 0, data.message || '');
+      if (data.status === 'done') {
+        clearInterval(_dbPollTimer);
+        setDbProgress(100, '✅ ' + data.message);
+        document.getElementById('db-progress-bar').style.background = 'linear-gradient(90deg,#22c55e,#16a34a)';
+        document.getElementById('btn-db-backup').disabled = false;
+        document.getElementById('btn-db-backup').innerHTML = '<i class="mdi mdi-database-export"></i> Backup DB Sekarang';
+        bcNotif('success', 'Backup database berhasil!');
+        if (data.web_link) {
+          document.getElementById('db-log').innerHTML += '<br><a href="' + _esc(data.web_link) + '" target="_blank" style="color:#7dd3fc;">🔗 Buka di Google Drive</a>';
+        }
+        refreshDriveList();
+      } else if (data.status === 'error') {
+        clearInterval(_dbPollTimer);
+        dbBackupError(data.message);
+      }
+    })
+    .catch(() => {});
+  }, 800);
+}
+
+function setDbProgress(pct, msg) {
+  document.getElementById('db-progress-bar').style.width = pct + '%';
+  document.getElementById('db-pct-lbl').textContent = pct + '%';
+  document.getElementById('db-log').textContent = msg;
+}
+function dbBackupError(msg) {
+  setDbProgress(0, '❌ ' + msg);
+  document.getElementById('db-progress-bar').style.background = 'linear-gradient(90deg,#ef4444,#dc2626)';
+  document.getElementById('btn-db-backup').disabled = false;
+  document.getElementById('btn-db-backup').innerHTML = '<i class="mdi mdi-database-export"></i> Backup DB Sekarang';
+  bcNotif('error', msg);
+}
+
+function refreshDriveList() {
+  var folderId = document.getElementById('folder-id-input').value.trim() || '{{ folder_id }}';
+  document.getElementById('drive-file-list').innerHTML =
+    '<div style="padding:20px;text-align:center;color:#4a5568;"><span class="spinner-border spinner-border-sm me-2"></span>Memuat...</div>';
+
+  fetch('/backup-center/db/gdrive-list/?folder_id=' + encodeURIComponent(folderId), { credentials: 'same-origin' })
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('file-count-badge').textContent = (data.count || 0) + ' file';
+    if (!data.files || data.files.length === 0) {
+      document.getElementById('drive-file-list').innerHTML =
+        '<div style="padding:28px;text-align:center;color:#4a5568;font-size:13px;"><i class="mdi mdi-cloud-off-outline" style="font-size:28px;display:block;margin-bottom:8px;"></i>Belum ada backup di Google Drive</div>';
+      return;
+    }
+    var html = '';
+    data.files.forEach(function(f) {
+      var dt = f.created_time ? new Date(f.created_time).toLocaleString('id-ID') : '-';
+      html += `<div class="drive-file-item">
+        <div class="drive-file-icon"><i class="mdi mdi-database"></i></div>
+        <div class="flex-grow-1">
+          <div class="drive-file-name">${_esc(f.filename)}</div>
+          <div class="drive-file-meta">${_esc(f.size_human)} &middot; ${dt}</div>
+        </div>
+        <a href="${_esc(f.web_link)}" target="_blank" class="drive-file-action" title="Buka di Drive"><i class="mdi mdi-open-in-new"></i></a>
+        <button onclick="deleteDriveFile('${_esc(f.id)}','${_esc(f.filename)}')" class="drive-file-action" style="border:none;background:none;" title="Hapus">
+          <i class="mdi mdi-trash-can" style="color:#fc8181;"></i>
+        </button>
+      </div>`;
+    });
+    document.getElementById('drive-file-list').innerHTML = html;
+  })
+  .catch(() => {
+    document.getElementById('drive-file-list').innerHTML =
+      '<div style="padding:20px;text-align:center;color:#ef4444;font-size:13px;">Gagal memuat daftar file</div>';
+  });
+}
+
+function deleteDriveFile(fileId, filename) {
+  Swal.fire({
+    title: 'Hapus dari Google Drive?',
+    html: '<code>' + _esc(filename) + '</code>',
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: 'Ya, Hapus', cancelButtonText: 'Batal',
+    confirmButtonColor: '#ef4444',
+    background: '#1a2540', color: '#e2e8f0',
+  }).then(r => {
+    if (!r.isConfirmed) return;
+    fetch('/gdrive/remote/delete/' + encodeURIComponent(fileId) + '/', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'X-CSRFToken': getCsrf() },
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status) { bcNotif('success', 'File dihapus dari Drive'); refreshDriveList(); }
+      else { bcNotif('error', data.error || 'Gagal'); }
+    });
+  });
+}
+
+/* ── Settings ────────────────────────────── */
+function saveSettings() {
+  var folderId = document.getElementById('folder-id-input').value.trim();
+  var schedule = parseInt(document.getElementById('schedule-select').value);
+
+  fetch('{% url "db_backup_settings" %}', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder_id: folderId, schedule_minutes: schedule }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    var msg = document.getElementById('settings-msg');
+    if (data.status) {
+      msg.innerHTML = '<span style="color:#4ade80;">✅ ' + data.message + '</span>';
+      var sd = document.getElementById('schedule-display');
+      if (sd) sd.textContent = schedule > 0 ? schedule + ' menit' : 'manual';
+      var fn = document.getElementById('folder-name-display');
+      if (fn && folderId) fn.textContent = folderId;
+      document.getElementById('folder-name-src').textContent = folderId || '{{ folder_id }}';
+    } else {
+      msg.innerHTML = '<span style="color:#f87171;">❌ ' + _esc(data.error || 'Error') + '</span>';
+    }
+    setTimeout(() => { msg.innerHTML = ''; }, 4000);
+  });
+}
+
+/* ── GDrive Credentials ──────────────────── */
+function loadJsonFile(input) {
+  if (!input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = e => { document.getElementById('sa-json-input').value = e.target.result; };
+  reader.readAsText(input.files[0]);
+}
+
+function saveGdriveCreds() {
+  var jsonStr = (document.getElementById('sa-json-input') || {}).value || '';
+  jsonStr = jsonStr.trim();
+  if (!jsonStr) { _credMsg('error', 'JSON tidak boleh kosong'); return; }
+  try { JSON.parse(jsonStr); } catch(e) { _credMsg('error', 'JSON tidak valid: ' + e.message); return; }
+
+  _credMsg('info', '<span class="spinner-border spinner-border-sm me-1"></span>Menghubungkan...');
+  fetch('{% url "gdrive_save_credentials" %}', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credentials_json: jsonStr }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.status) { bcNotif('success', 'Google Drive terhubung!'); setTimeout(() => location.reload(), 1200); }
+    else { _credMsg('error', '❌ ' + (data.error || 'Gagal')); }
+  })
+  .catch(e => _credMsg('error', 'Error: ' + e));
+}
+
+function disconnectGdrive() {
+  Swal.fire({
+    title: 'Putus koneksi Google Drive?',
+    text: 'Service Account JSON akan dihapus.',
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: 'Ya', cancelButtonText: 'Batal',
+    background: '#1a2540', color: '#e2e8f0', confirmButtonColor: '#ef4444',
+  }).then(r => {
+    if (!r.isConfirmed) return;
+    fetch('{% url "gdrive_delete_credentials" %}', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'X-CSRFToken': getCsrf() },
+    })
+    .then(r => r.json())
+    .then(data => { if (data.status) { bcNotif('success', 'Koneksi diputus'); setTimeout(() => location.reload(), 1000); } });
+  });
+}
+
+function _credMsg(type, html) {
+  var el = document.getElementById('cred-msg');
+  if (!el) return;
+  el.style.color = type === 'success' ? '#4ade80' : type === 'error' ? '#f87171' : '#94a3b8';
+  el.innerHTML = html;
+}
+
+/* ── Source Code Backup ──────────────────── */
+function checkSourceStats() {
+  fetch('{% url "backup_list" %}', { credentials: 'same-origin' })
+  .then(r => r.json())
+  .then(data => {
+    var totalSz = data.backups.reduce((a, b) => a + b.size, 0);
+    document.getElementById('stat-files').textContent = data.backups.length + ' backup';
+    if (data.backups.length > 0) {
+      document.getElementById('stat-raw').textContent = _humanSize(data.backups[0].size);
+      document.getElementById('stat-compressed').textContent = '~' + _humanSize(Math.round(data.backups[0].size * 0.4));
+    }
+    // Re-render local list
+    if (data.backups.length > 0) {
+      var html = '';
+      data.backups.forEach(function(b) {
+        html += `<div class="drive-file-item">
+          <div class="drive-file-icon" style="background:rgba(167,139,250,.15);color:#a78bfa;"><i class="mdi mdi-zip-box"></i></div>
+          <div class="flex-grow-1">
+            <div class="drive-file-name">${_esc(b.filename)}</div>
+            <div class="drive-file-meta">${_esc(b.size_human)}</div>
+          </div>
+          <a href="/backup/download/${encodeURIComponent(b.filename)}/" class="drive-file-action" title="Download"><i class="mdi mdi-download"></i></a>
+          <button onclick="uploadSrcToDrive('${_esc(b.filename)}')" class="drive-file-action" style="border:none;background:none;" title="Upload ke Drive">
+            <i class="mdi mdi-cloud-upload" style="color:#4ade80;"></i>
+          </button>
+        </div>`;
+      });
+      document.getElementById('local-backup-list').innerHTML = html;
+    }
+  });
+}
+
+function _humanSize(bytes) {
+  var units = ['B','KB','MB','GB'];
+  for (var i = 0; i < units.length; i++) {
+    if (bytes < 1024) return bytes.toFixed(1) + ' ' + units[i];
+    bytes /= 1024;
+  }
+  return bytes.toFixed(1) + ' TB';
+}
+
+function startSourceBackup(mode) {
+  var btnId = mode === 'download' ? 'btn-src-download' : 'btn-src-upload';
+  var btn = document.getElementById(btnId);
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Memproses...';
+
+  var wrap = document.getElementById('src-progress-wrap');
+  wrap.style.display = 'block';
+  setSrcProgress(0, 'Membuat arsip source code...');
+
+  fetch('{% url "backup_source_code" %}', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'X-CSRFToken': getCsrf() },
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.status) { srcError('Gagal: ' + (data.error || 'Unknown')); resetSrcBtn(mode); return; }
+    pollSrcBackup(data.backup_id, mode, data.filename, btnId);
+  })
+  .catch(e => { srcError('Error: ' + e); resetSrcBtn(mode); });
+}
+
+function pollSrcBackup(backupId, mode, filename, btnId) {
+  clearInterval(_srcPollTimer);
+  _srcPollTimer = setInterval(function() {
+    fetch('/backup/progress/' + backupId + '/', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+      setSrcProgress(data.progress || 0, data.message || '');
+      if (data.status === 'done') {
+        clearInterval(_srcPollTimer);
+        if (mode === 'download') {
+          setSrcProgress(100, '✅ Backup selesai! Memulai download...');
+          window.location.href = '/backup/download/' + encodeURIComponent(filename) + '/';
+        } else {
+          setSrcProgress(95, 'Backup selesai, mengupload ke Drive...');
+          uploadSrcToDrive(filename, btnId);
+          return;
+        }
+        resetSrcBtn(mode);
+        checkSourceStats();
+      } else if (data.status === 'error') {
+        clearInterval(_srcPollTimer);
+        srcError(data.message);
+        resetSrcBtn(mode);
+      }
+    }).catch(() => {});
+  }, 800);
+}
+
+function uploadSrcToDrive(filename, btnId) {
+  var folderId = document.getElementById('folder-id-input').value.trim() || '{{ folder_id }}';
+  fetch('{% url "gdrive_upload_backup" %}', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename: filename, folder_id: folderId }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.status) { srcError('Upload gagal: ' + (data.error || '')); if (btnId) resetSrcBtn('drive'); return; }
+    pollSrcUpload(data.upload_id, btnId);
+  });
+}
+
+function pollSrcUpload(uploadId, btnId) {
+  clearInterval(_srcPollTimer);
+  _srcPollTimer = setInterval(function() {
+    fetch('/gdrive/upload/progress/' + uploadId + '/', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+      setSrcProgress(data.progress || 0, data.message || '');
+      if (data.status === 'done') {
+        clearInterval(_srcPollTimer);
+        setSrcProgress(100, '✅ ' + data.message);
+        document.getElementById('src-progress-bar').style.background = 'linear-gradient(90deg,#22c55e,#16a34a)';
+        if (btnId) resetSrcBtn('drive');
+        bcNotif('success', 'Upload ke Google Drive selesai!');
+        if (data.web_link) {
+          document.getElementById('src-log').innerHTML += '<br><a href="' + _esc(data.web_link) + '" target="_blank" style="color:#7dd3fc;">🔗 Buka di Google Drive</a>';
+        }
+        refreshDriveList();
+      } else if (data.status === 'error') {
+        clearInterval(_srcPollTimer);
+        srcError(data.message);
+        if (btnId) resetSrcBtn('drive');
+      }
+    }).catch(() => {});
+  }, 800);
+}
+
+function setSrcProgress(pct, msg) {
+  document.getElementById('src-progress-bar').style.width = pct + '%';
+  document.getElementById('src-pct-lbl').textContent = pct + '%';
+  document.getElementById('src-log').textContent = msg;
+}
+function srcError(msg) {
+  setSrcProgress(0, '❌ ' + msg);
+  document.getElementById('src-progress-bar').style.background = 'linear-gradient(90deg,#ef4444,#dc2626)';
+  bcNotif('error', msg);
+}
+function resetSrcBtn(mode) {
+  if (mode === 'download') {
+    var b = document.getElementById('btn-src-download');
+    b.disabled = false;
+    b.innerHTML = '<i class="mdi mdi-download"></i> Download .tar.gz';
+  } else {
+    var b = document.getElementById('btn-src-upload');
+    b.disabled = false;
+    b.innerHTML = '<i class="mdi mdi-cloud-upload"></i> Upload ke Drive';
+  }
+}
+
+/* ── Export ──────────────────────────────── */
+function setExportType(t) {
+  _exportType = t;
+  ['all','xss','subdomain'].forEach(function(v) {
+    document.getElementById('type-' + v).classList.toggle('active', v === t);
+  });
+}
+function setExportFmt(f) {
+  _exportFmt = f;
+  ['json','csv'].forEach(function(v) {
+    document.getElementById('fmt-' + v).classList.toggle('active', v === f);
+  });
+  document.getElementById('export-btn-label').textContent = 'Download ' + f.toUpperCase();
+  document.getElementById('fmt-hint-json').style.display = f === 'json' ? '' : 'none';
+  document.getElementById('fmt-hint-csv').style.display = f === 'csv' ? '' : 'none';
+}
+function doExport() {
+  var url = '{% url "export_vulnerability_data" %}?type=' + _exportType + '&format=' + _exportFmt;
+  window.location.href = url;
+  bcNotif('success', 'Download dimulai...');
+}
+
+/* ── Init ────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function() {
+  checkSourceStats();
+  {% if connected %}refreshDriveList();{% endif %}
+});
+</script>
+{% endblock %}
