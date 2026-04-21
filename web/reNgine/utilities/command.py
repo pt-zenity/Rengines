@@ -7,7 +7,7 @@ import subprocess
 import time
 
 from celery.utils.log import get_task_logger
-from django.db import close_old_connections, OperationalError
+from django.db import OperationalError, close_old_connections
 from django.utils import timezone
 
 from reNgine.utilities.dns_wrapper import build_command_with_dns
