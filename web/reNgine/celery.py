@@ -12,6 +12,7 @@ from celery.signals import (
 )
 import django
 
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "reNgine.settings")
 django.setup()
 
@@ -24,6 +25,7 @@ app.autodiscover_tasks()
 @setup_logging.connect()
 def config_loggers(*args, **kwargs):
     from logging.config import dictConfig
+
     dictConfig(app.conf["LOGGING"])
 
 
@@ -37,6 +39,7 @@ def config_loggers(*args, **kwargs):
 # gevent shares a single process, so closing connections at process init would
 # drop every greenlet's connection. Instead, close per-task via prerun/postrun.
 
+
 @worker_process_init.connect()
 def worker_process_init_handler(**kwargs):
     """
@@ -45,6 +48,7 @@ def worker_process_init_handler(**kwargs):
     connection rather than inheriting a forked parent connection.
     """
     from django.db import connections
+
     # Close ALL connections - they will be re-opened on first DB access
     for conn in connections.all():
         try:
@@ -57,11 +61,9 @@ def worker_process_init_handler(**kwargs):
 def worker_ready_handler(**kwargs):
     """Called when the worker is fully ready to accept tasks."""
     import logging
+
     logger = logging.getLogger("celery.worker")
-    logger.info(
-        "reNgine Celery worker ready | pool=gevent | "
-        "soft_limit=10800s | hard_limit=14400s"
-    )
+    logger.info("reNgine Celery worker ready | pool=gevent | soft_limit=10800s | hard_limit=14400s")
 
 
 @task_prerun.connect()
@@ -73,6 +75,7 @@ def task_prerun_handler(task_id, task, *args, **kwargs):
     before each task to prevent 'too many clients' PostgreSQL errors.
     """
     from django.db import close_old_connections
+
     try:
         close_old_connections()
     except Exception:
@@ -88,6 +91,7 @@ def task_postrun_handler(task_id, task, *args, **kwargs):
     on the next DB access.
     """
     from django.db import connections
+
     for conn in connections.all():
         try:
             conn.close()
@@ -99,6 +103,7 @@ def task_postrun_handler(task_id, task, *args, **kwargs):
 def worker_shutting_down_handler(**kwargs):
     """Clean up DB connections when worker shuts down gracefully."""
     from django.db import connections
+
     for conn in connections.all():
         try:
             conn.close()
@@ -110,6 +115,7 @@ def worker_shutting_down_handler(**kwargs):
 def worker_process_shutdown_handler(**kwargs):
     """Final cleanup when the worker process exits."""
     from django.db import connections
+
     for conn in connections.all():
         try:
             conn.close()

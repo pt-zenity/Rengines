@@ -278,7 +278,7 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 # SOFT_TIME_LIMIT: raises SoftTimeLimitExceeded (catchable) after 3 hours.
 # TIME_LIMIT: hard-kills the worker process after 4 hours.
 CELERY_TASK_SOFT_TIME_LIMIT = 10800  # 3 hours
-CELERY_TASK_TIME_LIMIT = 14400       # 4 hours
+CELERY_TASK_TIME_LIMIT = 14400  # 4 hours
 
 # ── Memory management ────────────────────────────────────────────────────────
 # Recycle worker after N tasks to prevent memory leaks in long-running scans.
@@ -310,7 +310,7 @@ CELERY_REDIS_MAX_CONNECTIONS = 20
 # ── Chord / canvas reliability ───────────────────────────────────────────────
 # chord_unlock retry delay: how often to poll for chord completion (seconds)
 CELERY_CHORD_UNLOCK_MAX_RETRIES = 60  # max 60 retries = 10 min
-CELERY_CHORD_UNLOCK_DELAY = 10        # poll every 10 seconds
+CELERY_CHORD_UNLOCK_DELAY = 10  # poll every 10 seconds
 
 """
 Redis settings for distributed locking
